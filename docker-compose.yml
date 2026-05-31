@@ -8,7 +8,7 @@ services:
     environment:
       POSTGRES_DB: flowsharp_db
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: PostgresPassword123!
+      POSTGRES_PASSWORD: postgres
     volumes:
       - postgres_data:/var/lib/postgresql/data
 
@@ -32,10 +32,10 @@ services:
     environment:
       - ASPNETCORE_ENVIRONMENT=Production
       - ASPNETCORE_HTTP_PORTS=8080
-      - ConnectionStrings__DefaultConnection=Host=postgres;Port=5432;Database=flowsharp_db;Username=postgres;Password=PostgresPassword123!
+      - ConnectionStrings__DefaultConnection=Host=postgres;Port=5432;Database=flowsharp_db;Username=postgres;Password=postgres
       - Redis__ConnectionString=redis:6379
       - Database__ApplyMigrationsOnStartup=true
-      - Security__CredentialEncryptionKey=StrongDevelopmentKeyReplaceInProd321!
+      - Security__CredentialEncryptionKey=TXlTdXBlclNlY3JldEVuY3J5cHRpb25LZXkxMjM0NTY=
       - Plugins__Path=/app/plugins
     volumes:
       - flowsharp_plugins:/app/plugins
@@ -55,9 +55,9 @@ services:
       target: worker
     environment:
       - ASPNETCORE_ENVIRONMENT=Production
-      - ConnectionStrings__DefaultConnection=Host=postgres;Port=5432;Database=flowsharp_db;Username=postgres;Password=PostgresPassword123!
+      - ConnectionStrings__DefaultConnection=Host=postgres;Port=5432;Database=flowsharp_db;Username=postgres;Password=postgres
       - Redis__ConnectionString=redis:6379
-      - Security__CredentialEncryptionKey=StrongDevelopmentKeyReplaceInProd321!
+      - Security__CredentialEncryptionKey=TXlTdXBlclNlY3JldEVuY3J5cHRpb25LZXkxMjM0NTY=
     volumes:
       - flowsharp_logs:/app/logs
       - flowsharp_rag_db:/app/rag_db

@@ -359,7 +359,7 @@ a:hover {
     margin-bottom: 14px;
 }
 
-.account-content-panel .form-floating > label {
+.account-content-panel .form-floating>label {
     color: var(--mud-palette-text-secondary);
 }
 
@@ -432,7 +432,7 @@ a:hover {
     background: color-mix(in srgb, var(--mud-palette-surface) 78%, transparent);
 }
 
-.account-content-panel .table > :not(caption) > * > * {
+.account-content-panel .table> :not(caption)>*>* {
     padding: 14px 16px;
     border-bottom-color: var(--mud-palette-lines-default);
     color: var(--mud-palette-text-primary);
@@ -452,13 +452,13 @@ a:hover {
     white-space: nowrap;
 }
 
-.account-content-panel .table .btn + .btn {
+.account-content-panel .table .btn+.btn {
     margin-left: 8px;
 }
 
-.account-content-panel form + p,
-.account-content-panel p + form,
-.account-content-panel form + form {
+.account-content-panel form+p,
+.account-content-panel p+form,
+.account-content-panel form+form {
     margin-top: 12px;
 }
 
@@ -999,15 +999,3 @@ a:hover {
         grid-template-columns: 1fr;
     }
 }
-
-/* Selection Box styling for drawing Sticky Notes on canvas */
-.nwf-selection-box {
-    position: absolute !important;
-    border: 1.5px dashed var(--nwf-edge-active, #00f2fe) !important;
-    background: rgba(0, 242, 254, 0.08) !important;
-    pointer-events: none !important;
-    z-index: 1000 !important;
-    box-shadow: 0 0 10px rgba(0, 242, 254, 0.15) !important;
-    border-radius: 6px !important;
-}
-

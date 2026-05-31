@@ -245,9 +245,9 @@
                         @foreach (var subGroup in subGroups)
                         {
                             var subOpen = IsSubCatOpen(subGroup.Key);
-                            <div class="palette-cat" @onclick="() => ToggleSubCat(subGroup.Key)">
+                            <div class="palette-cat palette-subcat-row @(subOpen ? "open" : "")" @onclick="() => ToggleSubCat(subGroup.Key)">
                                 <span>
-                                    <span class="chev" style="display: inline-block; transition: transform 0.15s; transform: @(subOpen ? "rotate(90deg)" : "rotate(0deg)")">▶</span>
+                                    <span class="chev">▶</span>
                                     &nbsp;@subGroup.Key
                                 </span>
                                 <span class="palette-cat">@subGroup.Count()</span>
