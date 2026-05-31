@@ -1,8 +1,12 @@
 # FlowSharp
 
+![FlowSharp workflow automation hero](docs/assets/flowsharp-hero.png)
+
 > 🌐 **Languages:** [English](README.md) · [Türkçe](README.tr.md)
 
 An enterprise-grade **workflow automation** platform built with **C# / .NET 10 and Blazor**. It ships with a node-based visual flow designer, real executable nodes, AI agent support, scheduled/webhook triggers, and a **hot-loadable community plugin system**.
+
+![FlowSharp Workflow Designer dark and light UI mockup](docs/assets/flowsharp-designer-mockup.png)
 
 ---
 
@@ -364,4 +368,3 @@ For more details, see the [LICENSE.md](LICENSE.md) file.
 We welcome community contributions! To ensure code quality and prevent double work, we follow an **"Issue-Driven Contribution" (Talk First, Code Later)** model.
 
 Please read our [Contributing Guidelines](CONTRIBUTING.md) before making changes to the Core repository.
-
