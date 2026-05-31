@@ -1,0 +1,31 @@
+@inherits LayoutComponentBase
+
+<div class="Fsharp-shell">
+    <LayoutChrome />
+
+    <main class="Fsharp-main">
+        @Body
+    </main>
+</div>
+
+<div id="blazor-error-ui" data-nosnippet>
+    <div class="blazor-error-backdrop"></div>
+    <div class="blazor-error-popup">
+        <div class="blazor-error-icon">
+            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="10"/>
+                <line x1="12" y1="8" x2="12" y2="12"/>
+                <line x1="12" y1="16" x2="12.01" y2="16"/>
+            </svg>
+        </div>
+        <h3 class="blazor-error-title">@L["layout.error.title"]</h3>
+        <p class="blazor-error-desc">@L["layout.error.description"]</p>
+        <div class="blazor-error-actions">
+            <a href="." class="blazor-error-btn primary">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+                @L["layout.error.reload"]
+            </a>
+            <button class="blazor-error-btn ghost dismiss">@L["common.close"]</button>
+        </div>
+    </div>
+</div>

@@ -1,0 +1,77 @@
+@page "/workflows"
+@rendermode InteractiveServer
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.EntityFrameworkCore
+@using System.Text.Json
+@using FlowSharp.Application.Abstractions
+@using FlowSharp.Domain.Security
+@using FlowSharp.Domain.Workflows
+@using FlowSharp.Infrastructure.Data
+@attribute [Authorize(Policy = AppPermissions.WorkflowsRead)]
+
+<PageTitle>@L["nav.workflows"]</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.False" Class="Fsharp-page">
+    <MudStack Spacing="4">
+        <MudStack Row="true" AlignItems="AlignItems.Start" Justify="Justify.SpaceBetween" Class="Fsharp-page-head">
+            <div>
+                <MudText Typo="Typo.h4" Class="Fsharp-title">@L["nav.workflows"]</MudText>
+                <MudText Typo="Typo.body1" Color="Color.Secondary">@L["workflows.summary"]</MudText>
+            </div>
+            <MudButton Href="workflows/designer" Color="Color.Primary" Variant="Variant.Filled" StartIcon="@Icons.Material.Filled.Add">
+                @L["home.new_workflow"]
+            </MudButton>
+        </MudStack>
+
+        @if (workflows is null)
+        {
+            <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+        }
+        else if (workflows.Count == 0)
+        {
+            <MudPaper Class="Fsharp-empty Fsharp-surface" Elevation="0">
+                <MudIcon Icon="@Icons.Material.Filled.AccountTree" Size="Size.Large" Color="Color.Secondary" />
+                <MudText Typo="Typo.h6">@L["workflows.empty.title"]</MudText>
+                <MudText Color="Color.Secondary">@L["workflows.empty.summary"]</MudText>
+                <MudButton Href="workflows/designer" Color="Color.Primary" Variant="Variant.Filled" StartIcon="@Icons.Material.Filled.Add">
+                    @L["workflows.empty.open_designer"]
+                </MudButton>
+            </MudPaper>
+        }
+        else
+        {
+            <MudGrid Spacing="3">
+                @foreach (var wf in workflows)
+                {
+                    <MudItem xs="12" md="6" xl="4">
+                        <MudCard Class="Fsharp-card" Elevation="0">
+                            <MudCardContent>
+                                <MudStack Spacing="2">
+                                    <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween">
+                                        <MudText Typo="Typo.h6">@wf.Name</MudText>
+                                        <MudChip T="string" Size="Size.Small" Color="@(wf.IsActive ? Color.Success : Color.Default)">
+                                            @(wf.IsActive ? L["workflows.status.active"] : L["workflows.status.inactive"])
+                                        </MudChip>
+                                    </MudStack>
+                                    <MudText Typo="Typo.body2" Color="Color.Secondary">@(string.IsNullOrWhiteSpace(wf.Description) ? L["workflows.no_description"] : wf.Description)</MudText>
+                                    <MudText Typo="Typo.caption" Color="Color.Secondary">v@wf.Version</MudText>
+                                </MudStack>
+                            </MudCardContent>
+                            <MudCardActions>
+                                <MudButton Href="@($"workflows/designer/{wf.Id}")" Variant="Variant.Text" StartIcon="@Icons.Material.Filled.Edit">@L["common.edit"]</MudButton>
+                                <MudButton Variant="Variant.Text" Color="Color.Success" StartIcon="@Icons.Material.Filled.PlayArrow" OnClick="() => RunAsync(wf.Id)">@L["common.run"]</MudButton>
+                                <MudSpacer />
+                                <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Error" OnClick="() => DeleteAsync(wf.Id)" />
+                            </MudCardActions>
+                        </MudCard>
+                    </MudItem>
+                }
+            </MudGrid>
+        }
+
+        @if (!string.IsNullOrWhiteSpace(message))
+        {
+            <MudAlert Severity="Severity.Info" Variant="Variant.Filled">@message</MudAlert>
+        }
+    </MudStack>
+</MudContainer>

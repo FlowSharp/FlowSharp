@@ -1,0 +1,29 @@
+@page "/not-found"
+@layout MainLayout
+
+<PageTitle>Not Found</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.False" Class="Fsharp-page not-found-page">
+    <MudPaper Class="Fsharp-surface not-found-card" Elevation="0">
+        <MudStack AlignItems="AlignItems.Center" Spacing="3">
+            <div class="not-found-icon">
+                <MudIcon Icon="@Icons.Material.Filled.SearchOff" Size="Size.Large" />
+            </div>
+            <div class="not-found-copy">
+                <MudText Typo="Typo.h2" Class="Fsharp-title">404</MudText>
+                <MudText Typo="Typo.h5">Sayfa bulunamadi</MudText>
+                <MudText Typo="Typo.body1" Color="Color.Secondary">
+                    Aradiginiz sayfa tasinmis, silinmis ya da hic olusturulmamis olabilir.
+                </MudText>
+            </div>
+            <MudStack Row="true" Spacing="1" Class="not-found-actions">
+                <MudButton Href="/" Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Dashboard">
+                    Ana sayfaya don
+                </MudButton>
+                <MudButton Href="workflows" Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.AccountTree">
+                    Workflow'lari ac
+                </MudButton>
+            </MudStack>
+        </MudStack>
+    </MudPaper>
+</MudContainer>

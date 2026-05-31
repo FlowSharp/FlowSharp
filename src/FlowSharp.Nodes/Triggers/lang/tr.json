@@ -1,0 +1,12 @@
+{
+  "webhook.trigger.displayName": "Webhook",
+  "webhook.trigger.description": "Bir HTTP isteği geldiğinde workflow'u başlatır.",
+  "schedule.trigger.displayName": "Zamanlanmış Tetikleyici",
+  "schedule.trigger.description": "Workflow'u cron ifadesine göre periyodik çalıştırır.",
+  "email.imap.trigger.displayName": "E-posta Tetikleyici (IMAP)",
+  "email.imap.trigger.description": "IMAP gelen kutusuna yeni e-posta düştüğünde workflow'u başlatır.",
+  "chat.trigger.displayName": "Sohbet Arayüzü",
+  "chat.trigger.description": "Sohbet penceresinden mesaj geldiğinde workflow'u başlatır.",
+  "manual.trigger.displayName": "Manuel Tetikleyici",
+  "manual.trigger.description": "Workflow'u elle başlatır."
+}

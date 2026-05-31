@@ -1,0 +1,20 @@
+bin/
+obj/
+.vs/
+logs/
+web-run.*.log
+src/FlowSharp.Web/App_Data/DataProtectionKeys/
+src/FlowSharp.Web/Data/*.db
+
+# Runtime uretilen veriler (App_Data: RAG SQLite db'leri + DataProtection anahtarlari)
+src/FlowSharp.Web/App_Data/
+src/FlowSharp.Worker/App_Data/
+
+# SQLite yan dosyalari
+*.db-wal
+*.db-shm
+
+# Indirilen topluluk plugin'leri (Sample ve README repo'da kalir)
+src/FlowSharp.Web/plugins/*/
+!src/FlowSharp.Web/plugins/Sample/
+!src/FlowSharp.Web/plugins/README.md

@@ -1,0 +1,192 @@
+@implements IDisposable
+@using System.Globalization
+@inject NavigationManager NavigationManager
+@inject FlowSharp.Web.Localization.ILocalizer L
+
+<MudStack Class="Fsharp-nav-shell" Spacing="2">
+    <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Class="Fsharp-nav-top">
+        @if (!IsCollapsed)
+        {
+            <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1" Class="Fsharp-nav-brand">
+                <img src="assets/logo.svg" class="Fsharp-logo large" alt="FlowSharp Logo" />
+                <div>
+                    <MudText Typo="Typo.subtitle1">FlowSharp</MudText>
+                    <MudText Typo="Typo.caption">Automation Studio</MudText>
+                </div>
+            </MudStack>
+        }
+        else
+        {
+            <MudTooltip Text="FlowSharp" Placement="Placement.Right">
+                <img src="assets/logo.svg" class="Fsharp-logo compact" alt="FlowSharp Logo" />
+            </MudTooltip>
+        }
+
+        <MudTooltip Text="Menü">
+            <MudIconButton Class="Fsharp-menu-toggle"
+                           Icon="@(IsCollapsed ? Icons.Material.Filled.KeyboardDoubleArrowRight : Icons.Material.Filled.KeyboardDoubleArrowLeft)"
+                           Size="Size.Small"
+                           OnClick="OnToggleDrawer" />
+        </MudTooltip>
+    </MudStack>
+
+    <MudNavMenu Rounded="true" Dense="true" Margin="Margin.Dense" Color="Color.Primary">
+        @if (IsCollapsed)
+        {
+            <MudTooltip Text="@L["nav.home"]" Placement="Placement.Right">
+                <MudNavLink Href="" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.Dashboard" />
+            </MudTooltip>
+            <MudTooltip Text="@L["nav.workflows"]" Placement="Placement.Right">
+                <MudNavLink Href="workflows" Icon="@Icons.Material.Filled.AccountTree" />
+            </MudTooltip>
+            <MudTooltip Text="@L["nav.executions"]" Placement="Placement.Right">
+                <MudNavLink Href="executions" Icon="@Icons.Material.Filled.History" />
+            </MudTooltip>
+            <MudTooltip Text="@L["nav.credentials"]" Placement="Placement.Right">
+                <MudNavLink Href="credentials" Icon="@Icons.Material.Filled.Key" />
+            </MudTooltip>
+            <AuthorizeView Policy="@FlowSharp.Domain.Security.AppPermissions.PluginsManage">
+                <MudTooltip Text="@L["nav.marketplace"]" Placement="Placement.Right">
+                    <MudNavLink Href="marketplace" Icon="@Icons.Material.Filled.Extension" />
+                </MudTooltip>
+            </AuthorizeView>
+        }
+        else
+        {
+            <MudNavLink Href="" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.Dashboard">@L["nav.home"]</MudNavLink>
+            <MudNavLink Href="workflows" Icon="@Icons.Material.Filled.AccountTree">@L["nav.workflows"]</MudNavLink>
+            <MudNavLink Href="executions" Icon="@Icons.Material.Filled.History">@L["nav.executions"]</MudNavLink>
+            <MudNavLink Href="credentials" Icon="@Icons.Material.Filled.Key">@L["nav.credentials"]</MudNavLink>
+            <AuthorizeView Policy="@FlowSharp.Domain.Security.AppPermissions.PluginsManage">
+                <MudNavLink Href="marketplace" Icon="@Icons.Material.Filled.Extension">@L["nav.marketplace"]</MudNavLink>
+            </AuthorizeView>
+        }
+    </MudNavMenu>
+
+    <MudSpacer />
+
+    @if (IsCollapsed)
+    {
+        <MudStack AlignItems="AlignItems.Center" Spacing="1" Class="Fsharp-mini-actions">
+            <MudTooltip Text="Tema" Placement="Placement.Right">
+                <MudIconButton Icon="@(IsDarkMode ? Icons.Material.Filled.LightMode : Icons.Material.Filled.DarkMode)"
+                               Size="Size.Small"
+                               OnClick="OnToggleTheme" />
+            </MudTooltip>
+            @if (L.SupportedCultures.Count > 1)
+            {
+                <MudMenu Icon="@Icons.Material.Filled.Language" Size="Size.Small" AnchorOrigin="Origin.CenterRight" TransformOrigin="Origin.CenterLeft">
+                    @foreach (var c in L.SupportedCultures)
+                    {
+                        <MudMenuItem OnClick="() => ChangeCulture(c.Code)">@c.DisplayName</MudMenuItem>
+                    }
+                </MudMenu>
+            }
+        </MudStack>
+    }
+    else
+    {
+        <MudPaper Class="Fsharp-nav-settings" Elevation="0">
+            <MudStack Spacing="2">
+                <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween">
+                    <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1">
+                        <MudIcon Icon="@(IsDarkMode ? Icons.Material.Filled.DarkMode : Icons.Material.Filled.LightMode)" Size="Size.Small" />
+                        <MudText Typo="Typo.body2">Tema</MudText>
+                    </MudStack>
+                    <MudSwitch T="bool" Value="@IsDarkMode" ValueChanged="ToggleThemeValue" Color="Color.Primary" Size="Size.Small" />
+                </MudStack>
+
+                @if (L.SupportedCultures.Count > 1)
+                {
+                    <MudSelect T="string"
+                               Label="Dil"
+                               Value="@selectedCulture"
+                               ValueChanged="ChangeCulture"
+                               Variant="Variant.Outlined"
+                               Margin="Margin.Dense">
+                        @foreach (var c in L.SupportedCultures)
+                        {
+                            <MudSelectItem T="string" Value="@c.Code">@c.DisplayName</MudSelectItem>
+                        }
+                    </MudSelect>
+                }
+            </MudStack>
+        </MudPaper>
+    }
+
+    <AuthorizeView>
+        <Authorized>
+            <MudPaper Class="Fsharp-user-card" Elevation="0">
+                @if (!IsCollapsed)
+                {
+                    <MudButton Href="Account/Manage" Variant="Variant.Text" Size="Size.Small" FullWidth="true" StartIcon="@Icons.Material.Filled.Person">
+                        Profil
+                    </MudButton>
+                    <form action="Account/Logout" method="post">
+                        <AntiforgeryToken />
+                        <input type="hidden" name="ReturnUrl" value="@currentUrl" />
+                        <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Outlined" Size="Size.Small" FullWidth="true" StartIcon="@Icons.Material.Filled.Logout">
+                            @L["common.logout"]
+                        </MudButton>
+                    </form>
+                }
+            </MudPaper>
+        </Authorized>
+        <NotAuthorized>
+            @if (IsCollapsed)
+            {
+                <MudTooltip Text="@L["common.login"]" Placement="Placement.Right">
+                    <MudIconButton Href="Account/Login" Icon="@Icons.Material.Filled.Login" Color="Color.Primary" />
+                </MudTooltip>
+            }
+            else
+            {
+                <MudButton Href="Account/Login" Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Login" FullWidth="true">
+                    @L["common.login"]
+                </MudButton>
+            }
+        </NotAuthorized>
+    </AuthorizeView>
+</MudStack>
+
+@code {
+    [Parameter] public bool IsCollapsed { get; set; }
+    [Parameter] public bool IsDarkMode { get; set; }
+    [Parameter] public EventCallback OnToggleDrawer { get; set; }
+    [Parameter] public EventCallback OnToggleTheme { get; set; }
+
+    private string? currentUrl;
+    private string selectedCulture = CultureInfo.CurrentUICulture.TwoLetterISOLanguageName;
+
+    protected override void OnInitialized()
+    {
+        currentUrl = NavigationManager.ToBaseRelativePath(NavigationManager.Uri);
+        selectedCulture = CultureInfo.CurrentUICulture.TwoLetterISOLanguageName;
+        NavigationManager.LocationChanged += OnLocationChanged;
+    }
+
+    private void OnLocationChanged(object? sender, LocationChangedEventArgs e)
+    {
+        currentUrl = NavigationManager.ToBaseRelativePath(e.Location);
+        selectedCulture = CultureInfo.CurrentUICulture.TwoLetterISOLanguageName;
+        StateHasChanged();
+    }
+
+    public void Dispose() => NavigationManager.LocationChanged -= OnLocationChanged;
+
+    private Task ToggleThemeValue(bool _) => OnToggleTheme.InvokeAsync();
+
+    private void ChangeCulture(string code)
+    {
+        if (string.IsNullOrWhiteSpace(code) || string.Equals(code, selectedCulture, StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        selectedCulture = code;
+        NavigationManager.NavigateTo($"set-culture?culture={Uri.EscapeDataString(code)}&redirectUri=/{currentUrl}", forceLoad: true);
+    }
+
+    private static string Initial(string? name) =>
+        string.IsNullOrWhiteSpace(name) ? "?" : name.Trim()[0].ToString().ToUpperInvariant();
+}

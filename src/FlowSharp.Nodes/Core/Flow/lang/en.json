@@ -1,0 +1,14 @@
+{
+  "flow.wait.displayName": "Wait",
+  "flow.wait.description": "Pauses the flow for a given duration.",
+  "flow.stopAndError.displayName": "Stop And Error",
+  "flow.stopAndError.description": "Stops the flow with a custom error message.",
+  "flow.executeWorkflow.displayName": "Execute Workflow",
+  "flow.executeWorkflow.description": "Runs a sub-workflow and returns its output.",
+  "flow.executeWorkflowTrigger.displayName": "Execute Workflow Trigger",
+  "flow.executeWorkflowTrigger.description": "Starts when called by another workflow.",
+  "flow.loopOverItems.displayName": "Loop Over Items",
+  "flow.loopOverItems.description": "Processes items in batches.",
+  "error.trigger.displayName": "Error Trigger",
+  "error.trigger.description": "Runs when a workflow fails."
+}

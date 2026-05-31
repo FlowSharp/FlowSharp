@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" fill="none">
+  <defs>
+    <!-- Vibrant Blue-to-Green Gradient for the paths -->
+    <linearGradient id="primary-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0a84ff" />
+      <stop offset="100%" stop-color="#30d158" />
+    </linearGradient>
+    
+    <!-- Deep Blue Gradient for the bottom node -->
+    <linearGradient id="blue-node" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#2f97ff" />
+      <stop offset="100%" stop-color="#0056b3" />
+    </linearGradient>
+
+    <!-- Deep Green Gradient for the right nodes -->
+    <linearGradient id="green-node" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#34c759" />
+      <stop offset="100%" stop-color="#1e8237" />
+    </linearGradient>
+
+    <!-- Professional Drop Shadow -->
+    <filter id="logo-depth" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="3" stdDeviation="3.5" flood-color="#000000" flood-opacity="0.22"/>
+    </filter>
+  </defs>
+
+  <!-- Fine Outer Ring (Corporate Tech Shield) -->
+  <circle cx="50" cy="50" r="44" stroke="#ffffff" stroke-width="1.5" stroke-opacity="0.08" />
+
+  <!-- Flow Lines (The first logo's exact path structure) -->
+  <path d="M30 78V22H72" stroke="url(#primary-grad)" stroke-width="11" stroke-linecap="round" stroke-linejoin="round" filter="url(#logo-depth)" />
+  <path d="M30 50H60" stroke="url(#primary-grad)" stroke-width="11" stroke-linecap="round" stroke-linejoin="round" filter="url(#logo-depth)" />
+  
+  <!-- Endpoint Node Circles with gradients and shadows -->
+  <!-- Top Node -->
+  <circle cx="72" cy="22" r="8.5" fill="url(#green-node)" filter="url(#logo-depth)" />
+  <!-- Middle Node -->
+  <circle cx="60" cy="50" r="8.5" fill="url(#green-node)" filter="url(#logo-depth)" />
+  <!-- Bottom Node -->
+  <circle cx="30" cy="78" r="8.5" fill="url(#blue-node)" filter="url(#logo-depth)" />
+</svg>

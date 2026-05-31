@@ -1,0 +1,10 @@
+{
+  "if.condition.displayName": "Koşul (IF)",
+  "if.condition.description": "Koşula göre akışı true/false olarak dallandırır.",
+  "switch.condition.displayName": "Çoklu Koşul (Switch)",
+  "switch.condition.description": "Akışı birden çok kola dallandırır.",
+  "filter.items.displayName": "Filtre",
+  "filter.items.description": "Koşula uyan item'ları geçirir.",
+  "merge.items.displayName": "Birleştir",
+  "merge.items.description": "Birden çok girişi birleştirir."
+}

@@ -1,0 +1,6 @@
+{
+  "tool.calculator.displayName": "Calculator",
+  "tool.calculator.description": "Provides a math tool to the AI agent.",
+  "tool.httpRequest.displayName": "HTTP Request Tool",
+  "tool.httpRequest.description": "Provides an HTTP request tool to the AI agent."
+}

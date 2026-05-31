@@ -1,0 +1,14 @@
+{
+  "flow.wait.displayName": "Bekle",
+  "flow.wait.description": "Akışı belirtilen süre kadar bekletir.",
+  "flow.stopAndError.displayName": "Durdur ve Hata Ver",
+  "flow.stopAndError.description": "Akışı özel bir hata mesajıyla durdurur.",
+  "flow.executeWorkflow.displayName": "Workflow Çalıştır",
+  "flow.executeWorkflow.description": "Bir alt-workflow'u çalıştırır ve çıktısını döner.",
+  "flow.executeWorkflowTrigger.displayName": "Workflow Çalıştırma Tetikleyicisi",
+  "flow.executeWorkflowTrigger.description": "Başka bir workflow tarafından çağrıldığında başlar.",
+  "flow.loopOverItems.displayName": "Item'larda Döngü",
+  "flow.loopOverItems.description": "Item'ları parti parti (batch) işler.",
+  "error.trigger.displayName": "Hata Tetikleyici",
+  "error.trigger.description": "Bir workflow hata verince çalışır."
+}

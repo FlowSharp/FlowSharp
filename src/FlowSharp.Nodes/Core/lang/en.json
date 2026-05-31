@@ -1,0 +1,6 @@
+{
+  "set.fields.displayName": "Set",
+  "set.fields.description": "Adds or edits fields.",
+  "no.op.displayName": "No Operation",
+  "no.op.description": "Passes data through unchanged."
+}

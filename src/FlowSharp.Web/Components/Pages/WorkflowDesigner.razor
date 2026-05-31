@@ -1,0 +1,541 @@
+@page "/workflows/designer"
+@page "/workflows/designer/{WorkflowId:guid}"
+@page "/workflows/designer/{WorkflowId:guid}/executions/{ExecutionId:guid}"
+@rendermode InteractiveServer
+@using Microsoft.AspNetCore.Authorization
+@using FlowSharp.Domain.Nodes
+@using FlowSharp.Domain.Security
+
+@attribute [Authorize(Policy = AppPermissions.WorkflowsWrite)]
+
+<PageTitle>@workflowName</PageTitle>
+
+<div class="nwf-designer @(IsReadOnly ? "readonly-exec" : "") @(running ? "running" : "")">
+    <div class="nwf-toolbar">
+        <a class="btn btn-ghost btn-sm" href="workflows">← @L["nav.workflows"]</a>
+        <input class="name-input" @bind="workflowName" @bind:event="oninput" disabled="@IsReadOnly" />
+        <div class="spacer"></div>
+        <label class="toggle-wrap">
+            @L["home.active"]
+            <span class="switch">
+                <input type="checkbox" checked="@isActive" @onchange="ToggleActive" disabled="@IsReadOnly" />
+                <span class="slider"></span>
+            </span>
+        </label>
+        @if (!IsReadOnly)
+        {
+            <button class="btn btn-success btn-sm" @onclick="ExecuteAsync" disabled="@(nodes.Count == 0 || running)">
+                @(running ? L["designer.running"] : $"▶ {L["common.run"]}")
+            </button>
+            <button class="btn btn-primary btn-sm" @onclick="SaveAsync">@L["common.save"]</button>
+        }
+    </div>
+    @if (IsReadOnly)
+    {
+        <div class="execution-banner">
+            <span><i class="bi bi-clock-history"></i> &nbsp;<strong>@L["designer.banner.viewing_history"]</strong> (@L["designer.banner.readonly"])</span>
+            <a class="btn btn-ghost btn-sm" href="/executions">← @L["designer.banner.back_to_history"]</a>
+        </div>
+    }
+
+    <div class="nwf-canvas" id="nwf-canvas">
+        <div class="nwf-world">
+            <svg class="nwf-edges"></svg>
+
+            @foreach (var node in nodes)
+            {
+                var def = Definition(node.NodeKey);
+                if (node.NodeKey == "core.stickyNote")
+                {
+                    var title = GetParam(node, "title") is { Length: > 0 } t ? t : "Grup Başlığı";
+                    var notes = GetParam(node, "notes");
+                    var color = GetParam(node, "color") is { Length: > 0 } c ? c : "green";
+                    var width = GetParam(node, "width") is { Length: > 0 } w ? w : "400";
+                    var isCollapsed = GetParam(node, "collapsed") == "true";
+                    var height = isCollapsed ? "52" : (GetParam(node, "height") is { Length: > 0 } h ? h : "250");
+
+                    <div class="nwf-node nwf-sticky-note @color @(node.InstanceId == selectedId ? "selected" : "")"
+                         id="node-@node.InstanceId" 
+                         style="left:@(node.X)px; top:@(node.Y)px; width:@(width)px; height:@(height)px; min-height: 52px;">
+                        <div class="nwf-sticky-head">
+                            <input class="nwf-sticky-title-input" value="@title" @oninput='e => SetParam(node, "title", e.Value?.ToString())' disabled="@IsReadOnly" />
+                            
+                            <div class="nwf-sticky-controls">
+                                <div class="nwf-sticky-colors">
+                                    @foreach (var col in new[] { "green", "blue", "yellow", "red", "purple" })
+                                    {
+                                        var activeCol = col;
+                                        <span class="color-dot @activeCol @(color == activeCol ? "active" : "")" @onclick='() => SetParam(node, "color", activeCol)'></span>
+                                    }
+                                </div>
+                                
+                                <button class="nwf-sticky-collapse-btn" @onclick='() => SetParam(node, "collapsed", isCollapsed ? "false" : "true")'>
+                                    <i class="bi @(isCollapsed ? "bi-chevron-down" : "bi-chevron-up")"></i>
+                                </button>
+                                
+                                @if (!IsReadOnly)
+                                {
+                                    <button class="nwf-sticky-del-btn" @onclick="() => RemoveNode(node.InstanceId)" @onclick:stopPropagation>✕</button>
+                                }
+                            </div>
+                        </div>
+                        
+                        @if (!isCollapsed)
+                        {
+                            <textarea class="nwf-sticky-textarea" value="@notes" @oninput='e => SetParam(node, "notes", e.Value?.ToString())' disabled="@IsReadOnly"></textarea>
+                            
+                            @if (!IsReadOnly)
+                            {
+                                <div class="nwf-sticky-resize-handle"></div>
+                            }
+                        }
+                    </div>
+                }
+                else
+                {
+                    var inputPorts = def?.InputPorts ?? (node.NodeKey.Contains("trigger") ? Array.Empty<NodePort>() : [NodePort.Main]);
+                    var outputPorts = def?.OutputPorts ?? new[] { NodePort.Main };
+                    var mainIns = inputPorts.Select((p, idx) => (Port: p, Idx: idx)).Where(x => x.Port.Type == NodePortType.Main).ToList();
+                    var subIns = inputPorts.Select((p, idx) => (Port: p, Idx: idx)).Where(x => x.Port.Type != NodePortType.Main).ToList();
+                    var mainOuts = outputPorts.Select((p, idx) => (Port: p, Idx: idx)).Where(x => x.Port.Type == NodePortType.Main).ToList();
+                    var subOuts = outputPorts.Select((p, idx) => (Port: p, Idx: idx)).Where(x => x.Port.Type != NodePortType.Main).ToList();
+                    var rows = Math.Max(mainIns.Count, mainOuts.Count);
+                    var minHeight = Math.Max(84, 16 + rows * 20 + 14);
+
+                    <div class="nwf-node @(node.InstanceId == selectedId ? "selected" : "") status-@node.Status"
+                         id="node-@node.InstanceId" style="left:@(node.X)px; top:@(node.Y)px; min-height:@(minHeight)px">
+
+                        @if (!string.IsNullOrEmpty(node.Status))
+                        {
+                            var statusCls = node.Status switch
+                            {
+                                "Succeeded" => "success",
+                                "Failed" => "failed",
+                                "Running" => "running",
+                                _ => ""
+                            };
+                            var statusIcon = node.Status switch
+                            {
+                                "Succeeded" => "bi-check",
+                                "Failed" => "bi-x",
+                                "Running" => "bi-arrow-repeat nwf-spin",
+                                _ => ""
+                            };
+                            @if (!string.IsNullOrEmpty(statusCls) && !string.IsNullOrEmpty(statusIcon))
+                            {
+                                <div class="nwf-node-exec-status @statusCls">
+                                    <i class="bi @statusIcon"></i>
+                                </div>
+                            }
+                        }
+
+                        @for (var k = 0; k < mainIns.Count; k++)
+                        {
+                            <div class="nwf-port in" id="port-@node.InstanceId-in-@mainIns[k].Idx"
+                                 data-node="@node.InstanceId" data-port="@mainIns[k].Idx"
+                                 style="top:@(PortTop(k, mainIns.Count))px"></div>
+                        }
+                        @for (var k = 0; k < subIns.Count; k++)
+                        {
+                            <div class="nwf-port in sub-in" id="port-@node.InstanceId-in-@subIns[k].Idx"
+                                 data-node="@node.InstanceId" data-port="@subIns[k].Idx"
+                                 style="left:@(BottomX(k, subIns.Count))px">
+                                <span class="nwf-port-label sub">@subIns[k].Port.Label</span>
+                            </div>
+                        }
+
+                        <div class="nwf-node-head">
+                            <div class="nwf-node-icon" style="background:@(def?.Color ?? "#6b7280")">
+                                @if (def is not null && !string.IsNullOrWhiteSpace(def.Icon))
+                                {
+                                    <i class="bi @GetIconClass(def.Icon)"></i>
+                                }
+                                else
+                                {
+                                    @Initials(node.Name)
+                                }
+                            </div>
+                            <div class="nwf-node-title">
+                                <strong>@node.Name</strong>
+                                <span>@node.Category</span>
+                            </div>
+                        </div>
+
+                        <div class="nwf-node-foot">
+                            @if (!IsReadOnly)
+                            {
+                                <button class="nwf-node-del" @onclick="() => RemoveNode(node.InstanceId)" @onclick:stopPropagation>✕</button>
+                            }
+                        </div>
+
+                        @for (var k = 0; k < mainOuts.Count; k++)
+                        {
+                            <div class="nwf-port out" id="port-@node.InstanceId-out-@mainOuts[k].Idx"
+                                 data-node="@node.InstanceId" data-port="@mainOuts[k].Idx"
+                                 style="top:@(PortTop(k, mainOuts.Count))px">
+                                @if (mainOuts.Count > 1)
+                                {
+                                    <span class="nwf-port-label">@mainOuts[k].Port.Label</span>
+                                }
+                            </div>
+                        }
+                        @for (var k = 0; k < subOuts.Count; k++)
+                        {
+                            <div class="nwf-port out sub-out" id="port-@node.InstanceId-out-@subOuts[k].Idx"
+                                 data-node="@node.InstanceId" data-port="@subOuts[k].Idx"
+                                 style="left:@(BottomX(k, subOuts.Count))px"></div>
+                        }
+                    </div>
+                }
+            }
+        </div>
+
+        @if (nodes.Count == 0)
+        {
+            <div class="nwf-canvas-empty">
+                <div>
+                    <h2>@L["designer.empty.title"]</h2>
+                    <p>@L["designer.empty.summary"]</p>
+                </div>
+            </div>
+        }
+
+        @if (!IsReadOnly)
+        {
+            <button class="nwf-add-fab" title="@L["designer.node.add"]" @onclick="OpenPalette">+</button>
+        }
+
+        <div class="nwf-controls">
+            <button title="@L["designer.controls.zoom_in"]" @onclick='() => Module("zoomIn")'>+</button>
+            <button title="@L["designer.controls.zoom_out"]" @onclick='() => Module("zoomOut")'>−</button>
+            <button title="@L["designer.controls.fit_view"]" @onclick='() => Module("fitView")'>⤢</button>
+            <button title="@L["designer.controls.reset_view"]" @onclick='() => Module("resetView")'>⟲</button>
+        </div>
+
+        @if (HasChatTrigger)
+        {
+            <button class="nwf-chat-fab @(showChat ? "active" : "")" title="@L["designer.chat.assistant"]" @onclick="() => showChat = !showChat">
+                <i class="bi @(showChat ? "bi-x-lg" : "bi-chat-dots-fill")"></i>
+            </button>
+        }
+    </div>
+</div>
+
+@if (showPalette)
+{
+    <div class="nwf-drawer">
+        <div class="nwf-drawer-head">
+            <h2>@L["designer.node.add"]</h2>
+            <button class="nwf-drawer-close" @onclick="() => showPalette = false">✕</button>
+        </div>
+        <div class="nwf-drawer-body">
+            <input class="palette-search" placeholder="@L["designer.node.search"]" @bind="paletteSearch" @bind:event="oninput" />
+            @foreach (var group in FilteredCatalog())
+            {
+                var open = IsCatOpen(group.Key);
+                <div class="palette-cat @(open ? "open" : "")" @onclick="() => ToggleCat(group.Key)">
+                    <span><span class="chev">▶</span> &nbsp;@group.Key</span>
+                    <span class="palette-cat">@group.Count()</span>
+                </div>
+                @if (open)
+                {
+                    @if (group.Key == NodeCategory.Ai)
+                    {
+                        var subGroups = group.GroupBy(GetAiSubCategory).OrderBy(g => g.Key);
+                        @foreach (var subGroup in subGroups)
+                        {
+                            var subOpen = IsSubCatOpen(subGroup.Key);
+                            <div class="palette-cat" @onclick="() => ToggleSubCat(subGroup.Key)">
+                                <span>
+                                    <span class="chev" style="display: inline-block; transition: transform 0.15s; transform: @(subOpen ? "rotate(90deg)" : "rotate(0deg)")">▶</span>
+                                    &nbsp;@subGroup.Key
+                                </span>
+                                <span class="palette-cat">@subGroup.Count()</span>
+                            </div>
+                            @if (subOpen)
+                            {
+                                @foreach (var def in subGroup)
+                                {
+                                    <div class="palette-item" @onclick="() => AddNode(def)">
+                                        <span class="pi-icon" style="background:@def.Color">
+                                            @if (!string.IsNullOrWhiteSpace(def.Icon))
+                                            {
+                                                <i class="bi @GetIconClass(def.Icon)"></i>
+                                            }
+                                            else
+                                            {
+                                                @Initials(def.DisplayName)
+                                            }
+                                        </span>
+                                        <span class="pi-text">
+                                            <strong>@def.DisplayName</strong>
+                                            <span>@def.Description</span>
+                                        </span>
+                                    </div>
+                                }
+                            }
+                        }
+                    }
+                    else
+                    {
+                        @foreach (var def in group)
+                        {
+                            <div class="palette-item" @onclick="() => AddNode(def)">
+                                <span class="pi-icon" style="background:@def.Color">
+                                    @if (!string.IsNullOrWhiteSpace(def.Icon))
+                                    {
+                                        <i class="bi @GetIconClass(def.Icon)"></i>
+                                    }
+                                    else
+                                    {
+                                        @Initials(def.DisplayName)
+                                    }
+                                </span>
+                                <span class="pi-text">
+                                    <strong>@def.DisplayName</strong>
+                                    <span>@def.Description</span>
+                                </span>
+                            </div>
+                        }
+                    }
+                }
+            }
+        </div>
+    </div>
+}
+
+@if (openNode is not null)
+{
+    var def = Definition(openNode.NodeKey);
+    <div class="nwf-modal-backdrop" @onclick="CloseNdv">
+        <div class="nwf-modal" @onclick:stopPropagation="true">
+            <div class="nwf-modal-head">
+                <div class="nwf-node-icon" style="background:@(def?.Color ?? "#6b7280")">
+                    @if (def is not null && !string.IsNullOrWhiteSpace(def.Icon))
+                    {
+                        <i class="bi @GetIconClass(def.Icon)"></i>
+                    }
+                    else
+                    {
+                        @Initials(openNode.Name)
+                    }
+                </div>
+                <div>
+                    <strong>@openNode.Name</strong>
+                    <div class="sub">@def?.Description</div>
+                </div>
+                <div class="sp"></div>
+                @if (!IsReadOnly)
+                {
+                    <button class="btn btn-success btn-sm" @onclick="ExecuteAsync" disabled="@running">▶ @L["common.run"]</button>
+                }
+                <button class="nwf-drawer-close" @onclick="CloseNdv">✕</button>
+            </div>
+
+            <div class="ndv-grid">
+                <div class="ndv-col io input">
+                    <h3>@L["designer.ndv.input"] @(UpstreamName(openNode) is { } un ? $"· {un}" : "")</h3>
+                    @if (UpstreamOutput(openNode) is { } inp)
+                    {
+                        <div class="ndv-data"><pre>@inp</pre></div>
+                    }
+                    else
+                    {
+                        <div class="ndv-empty">@L["designer.ndv.no_upstream_data"]</div>
+                    }
+                </div>
+
+                <div class="ndv-col params">
+                    <div class="field">
+                        <label>@L["designer.ndv.node_name"]</label>
+                        <input class="input" value="@openNode.Name" @onchange="e => RenameNode(openNode, e.Value?.ToString())" disabled="@IsReadOnly" />
+                    </div>
+
+                    @if (def is not null && def.Key == "webhook.trigger")
+                    {
+                        <div class="field">
+                            <label>@L["designer.ndv.webhook_url"]</label>
+                            <div style="display:flex; gap:8px; align-items:center">
+                                <input class="input" readonly value="@WebhookUrl(openNode)" style="font-family:'JetBrains Mono',Consolas,monospace; font-size:12px" />
+                                <button class="btn btn-ghost btn-sm" title="Kopyala" @onclick="() => CopyAsync(WebhookUrl(openNode))">📋</button>
+                            </div>
+                            <div class="hint">Bu adrese @(GetParam(openNode, "method") is { Length: > 0 } m ? m : "POST") istegi gelince workflow tetiklenir.</div>
+                        </div>
+                    }
+
+                    @if (def is not null && def.Parameters.Count > 0)
+                    {
+                        @foreach (var p in def.Parameters)
+                        {
+                            <div class="field">
+                                <label>@p.Label @(p.IsRequired ? "*" : "")</label>
+                                @if (p.Type == NodeParameterType.Credential)
+                                {
+                                    <select class="select" value="@GetParam(openNode, p.Key)"
+                                            @onchange="e => SetParam(openNode, p.Key, e.Value?.ToString())" disabled="@IsReadOnly">
+                                        <option value="">— @L["designer.ndv.select_credential"] —</option>
+                                        @foreach (var c in CredentialsFor(def))
+                                        {
+                                            <option value="@c.Name">@c.Name (@c.Type)</option>
+                                        }
+                                    </select>
+                                    @if (!IsReadOnly)
+                                    {
+                                        <button class="btn btn-ghost btn-sm" style="margin-top:6px"
+                                                @onclick="() => StartCredAdd(def, p.Key)">+ @L["designer.ndv.add_new_credential"]</button>
+                                    }
+
+                                    @if (credAddOpen && credAddParamKey == p.Key)
+                                    {
+                                        <div class="cred-add">
+                                            <div class="field"><label>@L["credentials.form.name"]</label>
+                                                <input class="input" @bind="credAddName" placeholder="Ornek: Prod" /></div>
+                                            @foreach (var f in credAddFields)
+                                            {
+                                                <div class="cred-row">
+                                                    <input class="input" placeholder="@L["credentials.form.key_placeholder"]" @bind="f.Key" />
+                                                    <input class="input" type="@(IsSecretField(f.Key) ? "password" : "text")" placeholder="@L["credentials.form.value_placeholder"]" @bind="f.Value" />
+                                                    <button class="btn btn-danger btn-sm" @onclick="() => credAddFields.Remove(f)">−</button>
+                                                </div>
+                                            }
+                                            <button class="btn btn-ghost btn-sm" @onclick="() => credAddFields.Add(new())">+ @L["designer.ndv.add_field"]</button>
+                                            <div style="margin-top:10px; display:flex; gap:8px">
+                                                <button class="btn btn-primary btn-sm" @onclick="() => SaveCredAddAsync(def, p.Key)">@L["common.save"]</button>
+                                                <button class="btn btn-ghost btn-sm" @onclick="() => credAddOpen = false">@L["common.cancel"]</button>
+                                            </div>
+                                        </div>
+                                    }
+                                }
+                                else if (p.Type is NodeParameterType.Text or NodeParameterType.Json or NodeParameterType.Code)
+                                {
+                                    var prev = PreviewExpression(openNode, GetParam(openNode, p.Key));
+                                    <textarea class="textarea expr-@prev.State" value="@GetParam(openNode, p.Key)"
+                                              @oninput="e => SetParam(openNode, p.Key, e.Value?.ToString())" disabled="@IsReadOnly"></textarea>
+                                    @if (prev.State == "valid")
+                                    {
+                                        <div class="expr-hint expr-ok">= @prev.Message</div>
+                                    }
+                                    else if (prev.State == "invalid")
+                                    {
+                                        <div class="expr-hint expr-err">@prev.Message</div>
+                                    }
+                                }
+                                else if (p.Type == NodeParameterType.File)
+                                {
+                                    <InputFile OnChange="e => OnFileSelectedAsync(openNode, p.Key, e)" disabled="@IsReadOnly" />
+                                    @if (FileName(GetParam(openNode, p.Key)) is { } fn)
+                                    {
+                                        <div class="hint">Secili: <strong>@fn</strong>
+                                            <button class="btn btn-ghost btn-sm" @onclick="() => SetParam(openNode, p.Key, string.Empty)">@L["common.clear"]</button>
+                                        </div>
+                                    }
+                                }
+                                else if (p.Type == NodeParameterType.Boolean)
+                                {
+                                    <select class="select" value="@GetParam(openNode, p.Key)"
+                                            @onchange="e => SetParam(openNode, p.Key, e.Value?.ToString())" disabled="@IsReadOnly">
+                                        <option value="false">false</option>
+                                        <option value="true">true</option>
+                                    </select>
+                                }
+                                else if (p.Type == NodeParameterType.Select && p.Options is not null)
+                                {
+                                    <select class="select" value="@GetParam(openNode, p.Key)"
+                                            @onchange="e => SetParam(openNode, p.Key, e.Value?.ToString())" disabled="@IsReadOnly">
+                                        @foreach (var opt in p.Options)
+                                        {
+                                            <option value="@opt">@opt</option>
+                                        }
+                                    </select>
+                                }
+                                else
+                                {
+                                    var prev = PreviewExpression(openNode, GetParam(openNode, p.Key));
+                                    <input class="input expr-@prev.State" type="@(p.Type == NodeParameterType.Secret ? "password" : "text")"
+                                           value="@GetParam(openNode, p.Key)"
+                                           @oninput="e => SetParam(openNode, p.Key, e.Value?.ToString())" disabled="@IsReadOnly" />
+                                    @if (prev.State == "valid")
+                                    {
+                                        <div class="expr-hint expr-ok">= @prev.Message</div>
+                                    }
+                                    else if (prev.State == "invalid")
+                                    {
+                                        <div class="expr-hint expr-err">@prev.Message</div>
+                                    }
+                                }
+                                @if (!string.IsNullOrWhiteSpace(p.HelpText))
+                                {
+                                    <div class="hint">@p.HelpText</div>
+                                }
+                            </div>
+                        }
+                    }
+                    else
+                    {
+                        <p class="hint">@L["designer.ndv.no_parameters"]</p>
+                    }
+                </div>
+
+                <div class="ndv-col io output">
+                    <h3>@L["designer.ndv.output"]</h3>
+                    @if (NodeOutput(openNode.InstanceId) is { } output)
+                    {
+                        <div class="hint" style="margin-bottom:6px">@output.ItemCount @L["designer.ndv.items"]</div>
+                        <div class="ndv-data"><pre>@output.Json</pre></div>
+                    }
+                    else
+                    {
+                        <div class="ndv-empty">@L["designer.ndv.run_to_see_output"]</div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@if (showChat)
+{
+    <div class="nwf-chat">
+        <div class="nwf-chat-head">
+            <div class="nwf-chat-brand">
+                <div class="nwf-chat-avatar">
+                    <i class="bi bi-robot"></i>
+                    <span class="status-dot online"></span>
+                </div>
+                <div class="nwf-chat-title-group">
+                    <span class="nwf-chat-title">@L["designer.chat.title"]</span>
+                    <span class="nwf-chat-subtitle">@L["designer.chat.subtitle"]</span>
+                </div>
+            </div>
+            <button class="nwf-chat-close-btn" @onclick="() => showChat = false" title="@L["common.close"]">✕</button>
+        </div>
+        <div class="nwf-chat-msgs">
+            @foreach (var msg in chatMessages)
+            {
+                <div class="nwf-chat-msg @(msg.IsUser ? "user" : "bot")">@msg.Text</div>
+            }
+            @if (chatBusy)
+            {
+                <div class="nwf-chat-msg bot typing">
+                    <span class="dot"></span>
+                    <span class="dot"></span>
+                    <span class="dot"></span>
+                </div>
+            }
+        </div>
+        <div class="nwf-chat-input">
+            <input class="nwf-chat-text-input" placeholder="@L["designer.chat.input_placeholder"]" @bind="chatInput" @bind:event="oninput"
+                   @onkeydown="OnChatKeyDown" disabled="@chatBusy" />
+            <button class="nwf-chat-send-btn" @onclick="SendChatAsync" disabled="@(chatBusy || string.IsNullOrWhiteSpace(chatInput))" title="@L["common.send"]">
+                <i class="bi bi-send-fill"></i>
+            </button>
+        </div>
+    </div>
+}
+
+@if (!string.IsNullOrWhiteSpace(toast))
+{
+    <div class="toast @(toastError ? "error" : "")">@toast</div>
+}
+
+

@@ -1,0 +1,33 @@
+@inherits LayoutComponentBase
+@layout FlowSharp.Web.Components.Layout.MainLayout
+
+<MudContainer MaxWidth="MaxWidth.False" Class="Fsharp-page account-manage-page">
+    <MudStack Spacing="4">
+        <MudPaper Class="Fsharp-surface account-hero" Elevation="0">
+            <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+                <MudAvatar Color="Color.Primary" Size="Size.Large">
+                    <MudIcon Icon="@Icons.Material.Filled.Person" />
+                </MudAvatar>
+                <div>
+                    <MudText Typo="Typo.h4" Class="Fsharp-title">Hesap ayarlari</MudText>
+                    <MudText Typo="Typo.body1" Color="Color.Secondary">
+                        Profil, guvenlik ve erisim tercihlerinizi tek yerden yonetin.
+                    </MudText>
+                </div>
+            </MudStack>
+        </MudPaper>
+
+        <MudGrid Spacing="3" Class="account-layout-grid">
+            <MudItem xs="12" lg="3">
+                <MudPaper Class="Fsharp-surface account-nav-panel" Elevation="0">
+                    <ManageNavMenu />
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="12" lg="9">
+                <MudPaper Class="Fsharp-surface account-content-panel" Elevation="0">
+                    @Body
+                </MudPaper>
+            </MudItem>
+        </MudGrid>
+    </MudStack>
+</MudContainer>

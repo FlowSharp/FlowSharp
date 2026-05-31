@@ -1,0 +1,6 @@
+{
+  "tool.calculator.displayName": "Hesap Makinesi",
+  "tool.calculator.description": "AI ajanına matematik aracı sağlar.",
+  "tool.httpRequest.displayName": "HTTP İstek Aracı",
+  "tool.httpRequest.description": "AI ajanına HTTP isteği aracı sağlar."
+}

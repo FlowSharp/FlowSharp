@@ -1,0 +1,72 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: flowsharp-postgres
+    restart: unless-stopped
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: flowsharp_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: PostgresPassword123!
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    container_name: flowsharp-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+
+  flowsharp-web:
+    image: flowsharp-web:latest
+    container_name: flowsharp-web
+    restart: unless-stopped
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: web
+    ports:
+      - "8080:8080"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Production
+      - ASPNETCORE_HTTP_PORTS=8080
+      - ConnectionStrings__DefaultConnection=Host=postgres;Port=5432;Database=flowsharp_db;Username=postgres;Password=PostgresPassword123!
+      - Redis__ConnectionString=redis:6379
+      - Database__ApplyMigrationsOnStartup=true
+      - Security__CredentialEncryptionKey=StrongDevelopmentKeyReplaceInProd321!
+      - Plugins__Path=/app/plugins
+    volumes:
+      - flowsharp_plugins:/app/plugins
+      - flowsharp_logs:/app/logs
+      - flowsharp_rag_db:/app/rag_db
+    depends_on:
+      - postgres
+      - redis
+
+  flowsharp-worker:
+    image: flowsharp-worker:latest
+    container_name: flowsharp-worker
+    restart: unless-stopped
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: worker
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Production
+      - ConnectionStrings__DefaultConnection=Host=postgres;Port=5432;Database=flowsharp_db;Username=postgres;Password=PostgresPassword123!
+      - Redis__ConnectionString=redis:6379
+      - Security__CredentialEncryptionKey=StrongDevelopmentKeyReplaceInProd321!
+    volumes:
+      - flowsharp_logs:/app/logs
+      - flowsharp_rag_db:/app/rag_db
+    depends_on:
+      - postgres
+      - redis
+
+volumes:
+  postgres_data:
+  flowsharp_plugins:
+  flowsharp_logs:
+  flowsharp_rag_db:

@@ -1,0 +1,10 @@
+{
+  "if.condition.displayName": "IF",
+  "if.condition.description": "Branches the flow true/false based on a condition.",
+  "switch.condition.displayName": "Switch",
+  "switch.condition.description": "Branches the flow into multiple outputs.",
+  "filter.items.displayName": "Filter",
+  "filter.items.description": "Passes items matching a condition.",
+  "merge.items.displayName": "Merge",
+  "merge.items.description": "Combines multiple inputs."
+}

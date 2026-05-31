@@ -1,0 +1,78 @@
+@page "/executions"
+@rendermode InteractiveServer
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.EntityFrameworkCore
+@using FlowSharp.Domain.Security
+@using FlowSharp.Domain.Workflows
+@using FlowSharp.Infrastructure.Data
+@attribute [Authorize(Policy = AppPermissions.ExecutionsRead)]
+
+<PageTitle>@L["nav.executions"]</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.False" Class="Fsharp-page">
+    <MudStack Spacing="4">
+        <MudStack Row="true" AlignItems="AlignItems.Start" Justify="Justify.SpaceBetween" Class="Fsharp-page-head">
+            <div>
+                <MudText Typo="Typo.h4" Class="Fsharp-title">@L["nav.executions"]</MudText>
+                <MudText Typo="Typo.body1" Color="Color.Secondary">@L["executions.summary"]</MudText>
+            </div>
+            <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Refresh" OnClick="ReloadAsync">@L["executions.reload"]</MudButton>
+        </MudStack>
+
+        <MudPaper Class="Fsharp-surface" Elevation="0">
+            @if (executions is null)
+            {
+                <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+            }
+            else if (executions.Count == 0)
+            {
+                <MudStack AlignItems="AlignItems.Center" Class="Fsharp-empty" Spacing="1">
+                    <MudIcon Icon="@Icons.Material.Filled.History" Size="Size.Large" Color="Color.Secondary" />
+                    <MudText Typo="Typo.h6">@L["home.no_executions"]</MudText>
+                    <MudText Color="Color.Secondary">@L["executions.run_workflow_hint"]</MudText>
+                </MudStack>
+            }
+            else
+            {
+                <MudTable Items="executions" Dense="true" Hover="true" Elevation="0" Class="Fsharp-table">
+                    <HeaderContent>
+                        <MudTh>@L["home.table.workflow"]</MudTh>
+                        <MudTh>@L["home.table.status"]</MudTh>
+                        <MudTh>@L["home.table.start"]</MudTh>
+                        <MudTh>@L["home.table.duration"]</MudTh>
+                        <MudTh></MudTh>
+                    </HeaderContent>
+                    <RowTemplate>
+                        <MudTd DataLabel="@L["home.table.workflow"]">@(context.Workflow?.Name ?? "-")</MudTd>
+                        <MudTd DataLabel="@L["home.table.status"]"><MudChip T="string" Size="Size.Small" Color="@StatusColor(context.Status)">@StatusText(context.Status)</MudChip></MudTd>
+                        <MudTd DataLabel="@L["home.table.start"]">@context.StartedAt?.LocalDateTime.ToString("g")</MudTd>
+                        <MudTd DataLabel="@L["home.table.duration"]">@Duration(context)</MudTd>
+                        <MudTd>
+                            <MudButton Href="@($"/workflows/designer/{context.WorkflowId}/executions/{context.Id}")" Variant="Variant.Text" StartIcon="@Icons.Material.Filled.Visibility">
+                                @L["common.detail"]
+                            </MudButton>
+                        </MudTd>
+                    </RowTemplate>
+                </MudTable>
+            }
+        </MudPaper>
+    </MudStack>
+</MudContainer>
+
+@code {
+    private static Color StatusColor(WorkflowExecutionStatus status) => status switch
+    {
+        WorkflowExecutionStatus.Succeeded => Color.Success,
+        WorkflowExecutionStatus.Failed => Color.Error,
+        WorkflowExecutionStatus.Running => Color.Warning,
+        _ => Color.Default
+    };
+
+    private static string StatusText(WorkflowExecutionStatus status) => status switch
+    {
+        WorkflowExecutionStatus.Succeeded => "Basarili",
+        WorkflowExecutionStatus.Failed => "Hata",
+        WorkflowExecutionStatus.Running => "Calisiyor",
+        _ => "Kuyrukta"
+    };
+}

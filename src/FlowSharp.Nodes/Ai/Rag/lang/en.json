@@ -1,0 +1,6 @@
+{
+  "rag.insert.displayName": "Vector Store: Insert",
+  "rag.insert.description": "Embeds item texts into the vector store (RAG).",
+  "rag.query.displayName": "Vector Store: Query",
+  "rag.query.description": "Semantic search over the vector store (RAG)."
+}

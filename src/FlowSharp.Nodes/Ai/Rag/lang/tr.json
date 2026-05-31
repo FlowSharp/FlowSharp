@@ -1,0 +1,6 @@
+{
+  "rag.insert.displayName": "Vektör Deposu: Ekle",
+  "rag.insert.description": "Item metinlerini embedding'leyip vektör deposuna ekler (RAG).",
+  "rag.query.displayName": "Vektör Deposu: Sorgu",
+  "rag.query.description": "Vektör deposunda anlamsal arama yapar (RAG)."
+}

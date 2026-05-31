@@ -1,0 +1,16 @@
+{
+  "http.request.displayName": "HTTP Request",
+  "http.request.description": "Calls any REST API.",
+  "http.get.displayName": "HTTP GET",
+  "http.get.description": "Reads data from an API.",
+  "http.post.displayName": "HTTP POST",
+  "http.post.description": "Sends data to an API.",
+  "http.put.displayName": "HTTP PUT",
+  "http.put.description": "Fully updates a record.",
+  "http.patch.displayName": "HTTP PATCH",
+  "http.patch.description": "Partially updates a record.",
+  "http.delete.displayName": "HTTP DELETE",
+  "http.delete.description": "Deletes a record.",
+  "webhook.response.displayName": "Respond to Webhook",
+  "webhook.response.description": "Returns a custom HTTP response to the webhook caller."
+}

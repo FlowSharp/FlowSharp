@@ -1,0 +1,10 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/FlowSharp.Application/FlowSharp.Application.csproj" />
+    <Project Path="src/FlowSharp.Domain/FlowSharp.Domain.csproj" />
+    <Project Path="src/FlowSharp.Infrastructure/FlowSharp.Infrastructure.csproj" />
+    <Project Path="src/FlowSharp.Nodes/FlowSharp.Nodes.csproj" />
+    <Project Path="src/FlowSharp.Web/FlowSharp.Web.csproj" />
+    <Project Path="src/FlowSharp.Worker/FlowSharp.Worker.csproj" />
+  </Folder>
+</Solution>

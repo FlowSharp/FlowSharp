@@ -1,0 +1,153 @@
+@page "/marketplace"
+@rendermode InteractiveServer
+@using Microsoft.AspNetCore.Authorization
+@using FlowSharp.Application.Plugins
+@using FlowSharp.Domain.Security
+@attribute [Authorize(Policy = AppPermissions.PluginsManage)]
+@inject IPluginManager Plugins
+
+<PageTitle>@L["nav.marketplace"]</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.False" Class="Fsharp-page">
+    <MudStack Spacing="4">
+        <div>
+            <MudText Typo="Typo.h4" Class="Fsharp-title">@L["marketplace.title"]</MudText>
+            <MudText Typo="Typo.body1" Color="Color.Secondary">@L["marketplace.summary"]</MudText>
+        </div>
+
+        @if (!string.IsNullOrWhiteSpace(Plugins.OfficialMarketplaceUrl))
+        {
+            <MudPaper Class="Fsharp-surface" Elevation="0">
+                <MudStack Spacing="2">
+                    <MudText Typo="Typo.h6">@L["marketplace.official"]</MudText>
+                    <MudText Color="Color.Secondary">@L["marketplace.official.hint"]</MudText>
+                    <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1">
+                        <MudLink Href="@Plugins.OfficialMarketplaceUrl" Target="_blank">@Plugins.OfficialMarketplaceUrl</MudLink>
+                        <MudButton Variant="Variant.Outlined" Size="Size.Small" OnClick="() => repoUrl = Plugins.OfficialMarketplaceUrl!">
+                            @L["marketplace.official.use_address"]
+                        </MudButton>
+                    </MudStack>
+                </MudStack>
+            </MudPaper>
+        }
+
+        <MudPaper Class="Fsharp-surface" Elevation="0">
+            <MudStack Spacing="2">
+                <MudText Typo="Typo.h6">@L["marketplace.install_from_github"]</MudText>
+                <MudText Color="Color.Secondary">@L["marketplace.install_from_github.hint"]</MudText>
+                <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1" Class="Fsharp-input-row">
+                    <MudTextField @bind-Value="repoUrl" Placeholder="https://github.com/owner/repo" Disabled="@busy" Variant="Variant.Outlined" Class="flex-grow-1" />
+                    <MudButton Color="Color.Primary" Variant="Variant.Filled" StartIcon="@Icons.Material.Filled.Download" OnClick="InstallAsync" Disabled="@(busy || string.IsNullOrWhiteSpace(repoUrl))">
+                        @(busy ? L["marketplace.installing"] : L["marketplace.install"])
+                    </MudButton>
+                </MudStack>
+                <MudAlert Severity="Severity.Warning" Variant="Variant.Outlined">@L["marketplace.warning"]</MudAlert>
+            </MudStack>
+        </MudPaper>
+
+        @if (message is not null)
+        {
+            <MudAlert Severity="@(isError ? Severity.Error : Severity.Success)" Variant="Variant.Filled">@message</MudAlert>
+        }
+
+        <MudPaper Class="Fsharp-surface" Elevation="0">
+            <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Class="mb-3">
+                <MudText Typo="Typo.h6">@L["marketplace.installed_plugins"]</MudText>
+                <MudButton Variant="Variant.Outlined" Size="Size.Small" StartIcon="@Icons.Material.Filled.Refresh" OnClick="Refresh" Disabled="@busy">@L["executions.reload"]</MudButton>
+            </MudStack>
+
+            @if (list.Count == 0)
+            {
+                <MudText Color="Color.Secondary">@L["marketplace.empty.summary"]</MudText>
+            }
+            else
+            {
+                <MudTable Items="list" Dense="true" Hover="true" Elevation="0" Class="Fsharp-table">
+                    <HeaderContent>
+                        <MudTh>@L["marketplace.table.plugin"]</MudTh>
+                        <MudTh>@L["home.table.status"]</MudTh>
+                        <MudTh>@L["marketplace.table.nodes"]</MudTh>
+                        <MudTh></MudTh>
+                    </HeaderContent>
+                    <RowTemplate>
+                        <MudTd DataLabel="@L["marketplace.table.plugin"]"><strong>@context.Name</strong></MudTd>
+                        <MudTd DataLabel="@L["home.table.status"]">
+                            <MudChip T="string" Size="Size.Small" Color="@(context.Loaded ? Color.Success : Color.Error)">
+                                @(context.Loaded ? L["marketplace.status.installed"] : L["marketplace.status.error"])
+                            </MudChip>
+                        </MudTd>
+                        <MudTd DataLabel="@L["marketplace.table.nodes"]">
+                            @if (context.Nodes.Count > 0)
+                            {
+                                @string.Join(", ", context.Nodes.Select(n => n.DisplayName))
+                            }
+                            else if (!context.Loaded)
+                            {
+                                <MudText Typo="Typo.caption" Color="Color.Error">@context.Error</MudText>
+                            }
+                        </MudTd>
+                        <MudTd>
+                            <MudStack Row="true" Justify="Justify.FlexEnd" Spacing="1">
+                                <MudButton Variant="Variant.Text" Size="Size.Small" OnClick="() => ReloadAsync(context.Name)" Disabled="@busy">@L["marketplace.action.reload"]</MudButton>
+                                <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" Color="Color.Error" OnClick="() => RemoveAsync(context.Name)" Disabled="@busy" />
+                            </MudStack>
+                        </MudTd>
+                    </RowTemplate>
+                </MudTable>
+            }
+        </MudPaper>
+    </MudStack>
+</MudContainer>
+
+@code {
+    private string repoUrl = "";
+    private bool busy;
+    private string? message;
+    private bool isError;
+    private IReadOnlyList<PluginInfo> list = [];
+
+    protected override void OnInitialized() => Refresh();
+
+    private void Refresh() => list = Plugins.List();
+
+    private async Task InstallAsync()
+    {
+        busy = true; message = null;
+        try
+        {
+            var info = await Plugins.InstallFromGitHubAsync(repoUrl.Trim());
+            Set(info.Loaded
+                ? $"'{info.Name}' kuruldu ({info.Nodes.Count} node)."
+                : $"'{info.Name}' kuruldu ama yuklenemedi: {info.Error}", !info.Loaded);
+            repoUrl = "";
+        }
+        catch (Exception ex) { Set(ex.Message, true); }
+        finally { busy = false; Refresh(); }
+    }
+
+    private async Task ReloadAsync(string name)
+    {
+        busy = true; message = null;
+        try
+        {
+            var info = await Plugins.ReloadAsync(name);
+            Set(info.Loaded ? $"'{name}' yeniden yuklendi." : $"'{name}' hata: {info.Error}", !info.Loaded);
+        }
+        catch (Exception ex) { Set(ex.Message, true); }
+        finally { busy = false; Refresh(); }
+    }
+
+    private async Task RemoveAsync(string name)
+    {
+        busy = true; message = null;
+        try
+        {
+            await Plugins.RemoveAsync(name);
+            Set($"'{name}' kaldirildi.", false);
+        }
+        catch (Exception ex) { Set(ex.Message, true); }
+        finally { busy = false; Refresh(); }
+    }
+
+    private void Set(string text, bool error) { message = text; isError = error; }
+}

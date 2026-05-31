@@ -1,0 +1,4 @@
+{
+  "postgres.query.displayName": "Postgres",
+  "postgres.query.description": "Runs a PostgreSQL query."
+}

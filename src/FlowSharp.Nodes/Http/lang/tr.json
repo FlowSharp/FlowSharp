@@ -1,0 +1,16 @@
+{
+  "http.request.displayName": "HTTP İstek",
+  "http.request.description": "Herhangi bir REST API'yi çağırır.",
+  "http.get.displayName": "HTTP GET",
+  "http.get.description": "Bir API'den veri okur.",
+  "http.post.displayName": "HTTP POST",
+  "http.post.description": "Bir API'ye veri gönderir.",
+  "http.put.displayName": "HTTP PUT",
+  "http.put.description": "Bir kaydı tümüyle günceller.",
+  "http.patch.displayName": "HTTP PATCH",
+  "http.patch.description": "Bir kaydı kısmen günceller.",
+  "http.delete.displayName": "HTTP DELETE",
+  "http.delete.description": "Bir kaydı siler.",
+  "webhook.response.displayName": "Webhook'a Yanıt",
+  "webhook.response.description": "Webhook çağıranına özel HTTP yanıtı döner."
+}

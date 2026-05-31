@@ -1,0 +1,10 @@
+{
+  "email.send.displayName": "Send Email",
+  "email.send.description": "Sends an email over SMTP.",
+  "telegram.message.displayName": "Telegram",
+  "telegram.message.description": "Sends a message to a Telegram chat.",
+  "slack.message.displayName": "Slack",
+  "slack.message.description": "Sends a message to a Slack channel.",
+  "discord.message.displayName": "Discord",
+  "discord.message.description": "Sends a message to a Discord webhook."
+}

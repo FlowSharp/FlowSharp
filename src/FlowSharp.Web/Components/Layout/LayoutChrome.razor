@@ -1,0 +1,87 @@
+@rendermode InteractiveServer
+@inject IJSRuntime JS
+
+<MudThemeProvider Theme="@AppleTheme" IsDarkMode="@isDarkMode" />
+<MudPopoverProvider />
+<MudDialogProvider />
+<MudSnackbarProvider />
+
+<aside class="@($"Fsharp-drawer {(drawerOpen ? "expanded" : "mini")}")">
+    <NavMenu IsCollapsed="@(!drawerOpen)"
+             IsDarkMode="@isDarkMode"
+             OnToggleDrawer="ToggleDrawer"
+             OnToggleTheme="ToggleTheme" />
+</aside>
+
+@code {
+    private bool drawerOpen = true;
+    private bool isDarkMode;
+
+    private static readonly MudTheme AppleTheme = new()
+    {
+        PaletteLight = new PaletteLight
+        {
+            Primary = "#007aff",
+            Secondary = "#8e8e93",
+            Tertiary = "#ff9f0a",
+            Success = "#34c759",
+            Warning = "#ff9f0a",
+            Error = "#ff453a",
+            AppbarBackground = "rgba(246,246,248,0.74)",
+            DrawerBackground = "rgba(246,246,248,0.78)",
+            Background = "#f5f5f7",
+            Surface = "#ffffff",
+            TextPrimary = "#1d1d1f",
+            TextSecondary = "#6e6e73",
+            LinesDefault = "rgba(0,0,0,0.10)",
+            TableLines = "rgba(0,0,0,0.07)"
+        },
+        PaletteDark = new PaletteDark
+        {
+            Primary = "#0a84ff",
+            Secondary = "#98989d",
+            Tertiary = "#ff9f0a",
+            Success = "#30d158",
+            Warning = "#ffd60a",
+            Error = "#ff453a",
+            AppbarBackground = "rgba(29,29,31,0.72)",
+            DrawerBackground = "rgba(29,29,31,0.78)",
+            Background = "#121214",
+            Surface = "#1c1c1e",
+            TextPrimary = "#f5f5f7",
+            TextSecondary = "#98989d",
+            LinesDefault = "rgba(255,255,255,0.12)",
+            TableLines = "rgba(255,255,255,0.08)"
+        },
+        LayoutProperties = new LayoutProperties
+        {
+            DefaultBorderRadius = "8px"
+        },
+        Typography = new Typography
+        {
+            Default = new DefaultTypography
+            {
+                FontFamily = ["-Fsharp-system", "BlinkMacSystemFont", "SF Pro Display", "Segoe UI", "Roboto", "Helvetica Neue", "Arial", "sans-serif"]
+            }
+        }
+    };
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender)
+        {
+            return;
+        }
+
+        isDarkMode = await JS.InvokeAsync<bool>("FlowSharp.get");
+        StateHasChanged();
+    }
+
+    private void ToggleDrawer() => drawerOpen = !drawerOpen;
+
+    private async Task ToggleTheme()
+    {
+        isDarkMode = !isDarkMode;
+        await JS.InvokeVoidAsync("FlowSharp.set", isDarkMode);
+    }
+}

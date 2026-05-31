@@ -1,0 +1,10 @@
+{
+  "email.send.displayName": "E-posta Gönder",
+  "email.send.description": "SMTP ile e-posta gönderir.",
+  "telegram.message.displayName": "Telegram",
+  "telegram.message.description": "Telegram sohbetine mesaj gönderir.",
+  "slack.message.displayName": "Slack",
+  "slack.message.description": "Slack kanalına mesaj gönderir.",
+  "discord.message.displayName": "Discord",
+  "discord.message.description": "Discord webhook'una mesaj gönderir."
+}

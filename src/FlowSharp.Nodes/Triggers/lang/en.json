@@ -1,0 +1,12 @@
+{
+  "webhook.trigger.displayName": "Webhook",
+  "webhook.trigger.description": "Starts the workflow when an HTTP request arrives.",
+  "schedule.trigger.displayName": "Schedule Trigger",
+  "schedule.trigger.description": "Runs the workflow periodically using a cron expression.",
+  "email.imap.trigger.displayName": "Email Trigger (IMAP)",
+  "email.imap.trigger.description": "Starts when a new email arrives in the IMAP inbox.",
+  "chat.trigger.displayName": "Chat Trigger",
+  "chat.trigger.description": "Starts the workflow when a message arrives from the chat window.",
+  "manual.trigger.displayName": "Manual Trigger",
+  "manual.trigger.description": "Starts the workflow manually."
+}
