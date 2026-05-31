@@ -224,7 +224,7 @@ The app listens on `https://localhost:7163` and `http://localhost:5094`.
 ```jsonc
 {
   "ConnectionStrings": {
-    "DefaultConnection": "Host=localhost;Port=5432;Database=flowsharp_db;Username=postgres;Password=Postgres123!"
+    "DefaultConnection": "Host=localhost;Port=5432;Database=flowsharp_db;Username=postgres;Password=postgres"
   },
   "Database": { "ApplyMigrationsOnStartup": false },
   "Redis": { "ConnectionString": "localhost:6379" },
