@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 using StackExchange.Redis;
 using FlowSharp.Application.Abstractions;
 using FlowSharp.Application.Nodes;
@@ -23,14 +24,40 @@ public static class DependencyInjection
         var connectionString = configuration.GetConnectionString("DefaultConnection")
             ?? throw new InvalidOperationException("Connection string 'DefaultConnection' not found.");
 
-        services.AddDbContext<ApplicationDbContext>(options => options.UseNpgsql(connectionString));
+        services.Configure<DatabaseOptions>(configuration.GetSection(DatabaseOptions.SectionName));
+        var databaseProvider = DatabaseProviders.Normalize(configuration.GetValue<string>("Database:Provider"));
+
+        services.AddDbContext<ApplicationDbContext>(options =>
+        {
+            switch (databaseProvider)
+            {
+                case DatabaseProviders.SqlServer:
+                    options.UseSqlServer(connectionString);
+                    break;
+                case DatabaseProviders.Sqlite:
+                    options.UseSqlite(connectionString);
+                    break;
+                default:
+                    options.UseNpgsql(connectionString);
+                    break;
+            }
+        });
         services.Configure<HttpNodeNetworkOptions>(configuration.GetSection(HttpNodeNetworkOptions.SectionName));
         services.AddTransient<PrivateNetworkBlockingHandler>();
         services.AddHttpClient("workflow-nodes")
             .AddHttpMessageHandler<PrivateNetworkBlockingHandler>();
 
         // Kuyruk ve calistirma
-        services.AddScoped<IWorkflowQueue, PostgresWorkflowQueue>();
+        services.AddScoped<IWorkflowQueue>(sp =>
+        {
+            var provider = DatabaseProviders.Normalize(sp.GetRequiredService<IOptions<DatabaseOptions>>().Value.Provider);
+            return provider switch
+            {
+                DatabaseProviders.SqlServer => ActivatorUtilities.CreateInstance<SqlServerWorkflowQueue>(sp),
+                DatabaseProviders.Sqlite => ActivatorUtilities.CreateInstance<SqliteWorkflowQueue>(sp),
+                _ => ActivatorUtilities.CreateInstance<PostgresWorkflowQueue>(sp)
+            };
+        });
         services.AddScoped<IWorkflowRunner, WorkflowRunner>();
         services.Configure<Application.Workflows.ExecutionOptions>(
             configuration.GetSection(Application.Workflows.ExecutionOptions.SectionName));

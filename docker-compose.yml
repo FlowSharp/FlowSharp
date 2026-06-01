@@ -32,7 +32,8 @@ services:
     environment:
       - ASPNETCORE_ENVIRONMENT=Production
       - ASPNETCORE_HTTP_PORTS=8080
-      - ConnectionStrings__DefaultConnection=Host=postgres;Port=5432;Database=flowsharp_db;Username=postgres;Password=postgres
+      - Database__Provider=Sqlite
+      - ConnectionStrings__DefaultConnection=Data Source=/app/App_Data/flowsharp.db
       - Redis__ConnectionString=redis:6379
       - Database__ApplyMigrationsOnStartup=true
       - Security__CredentialEncryptionKey=TXlTdXBlclNlY3JldEVuY3J5cHRpb25LZXkxMjM0NTY=
@@ -41,8 +42,8 @@ services:
       - flowsharp_plugins:/app/plugins
       - flowsharp_logs:/app/logs
       - flowsharp_rag_db:/app/rag_db
+      - flowsharp_sqlite_data:/app/App_Data
     depends_on:
-      - postgres
       - redis
 
   flowsharp-worker:
@@ -55,14 +56,15 @@ services:
       target: worker
     environment:
       - ASPNETCORE_ENVIRONMENT=Production
-      - ConnectionStrings__DefaultConnection=Host=postgres;Port=5432;Database=flowsharp_db;Username=postgres;Password=postgres
+      - Database__Provider=Sqlite
+      - ConnectionStrings__DefaultConnection=Data Source=/app/App_Data/flowsharp.db
       - Redis__ConnectionString=redis:6379
       - Security__CredentialEncryptionKey=TXlTdXBlclNlY3JldEVuY3J5cHRpb25LZXkxMjM0NTY=
     volumes:
       - flowsharp_logs:/app/logs
       - flowsharp_rag_db:/app/rag_db
+      - flowsharp_sqlite_data:/app/App_Data
     depends_on:
-      - postgres
       - redis
 
 volumes:
@@ -70,3 +72,4 @@ volumes:
   flowsharp_plugins:
   flowsharp_logs:
   flowsharp_rag_db:
+  flowsharp_sqlite_data:
