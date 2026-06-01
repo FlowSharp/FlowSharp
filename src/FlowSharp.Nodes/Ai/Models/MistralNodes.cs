@@ -22,10 +22,11 @@ public sealed class MistralChatNode : AiChatNodeBase
             ModelParam("mistral-large-latest")
         ],
         Tags: ["mistral", "ai"],
-        Icon: "bot",
+        Icon: "robot",
         IsAiPowered: true,
         Color: "#f472b6",
-        Credentials: ["mistralApi"]
+        Credentials: ["mistralApi"],
+        SubCategory: "AI Chat Nodes"
     );
 }
 
@@ -43,10 +44,11 @@ public sealed class MistralChatModelNode : NodeType
             new NodeParameterDefinition("model", "Model", NodeParameterType.String, DefaultValue: "mistral-large-latest")
         ],
         Tags: ["mistral", "ai"],
-        Icon: "bot",
+        Icon: "robot",
         Color: "#f472b6",
         IsAiPowered: true,
         Credentials: ["mistralApi"],
+        SubCategory: "AI Models",
         Inputs: [],
         Outputs: [new NodePort("model", "Model", NodePortType.AiModel)]
     );

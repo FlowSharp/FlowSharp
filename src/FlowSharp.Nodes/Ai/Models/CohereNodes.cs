@@ -22,10 +22,11 @@ public sealed class CohereChatNode : AiChatNodeBase
             ModelParam("command-r-plus")
         ],
         Tags: ["cohere", "ai"],
-        Icon: "bot",
+        Icon: "robot",
         IsAiPowered: true,
         Color: "#8b5cf6",
-        Credentials: ["cohereApi"]
+        Credentials: ["cohereApi"],
+        SubCategory: "AI Chat Nodes"
     );
 }
 
@@ -43,10 +44,11 @@ public sealed class CohereChatModelNode : NodeType
             new NodeParameterDefinition("model", "Model", NodeParameterType.String, DefaultValue: "command-r-plus")
         ],
         Tags: ["cohere", "ai"],
-        Icon: "bot",
+        Icon: "robot",
         Color: "#8b5cf6",
         IsAiPowered: true,
         Credentials: ["cohereApi"],
+        SubCategory: "AI Models",
         Inputs: [],
         Outputs: [new NodePort("model", "Model", NodePortType.AiModel)]
     );

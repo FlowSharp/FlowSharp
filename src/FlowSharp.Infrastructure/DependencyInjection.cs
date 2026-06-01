@@ -35,7 +35,14 @@ public static class DependencyInjection
                     options.UseSqlServer(connectionString);
                     break;
                 case DatabaseProviders.Sqlite:
-                    options.UseSqlite(connectionString);
+                    // Web ve Worker ayni dosyaya erisir; SQLITE_BUSY'de hemen hata vermek yerine
+                    // bu sure boyunca retry edilsin (es zamanli erisim icin). WAL modu migrate'te acilir.
+                    var sqliteConnectionString = new Microsoft.Data.Sqlite.SqliteConnectionStringBuilder(connectionString)
+                    {
+                        DefaultTimeout = 30,
+                        Pooling = true
+                    }.ConnectionString;
+                    options.UseSqlite(sqliteConnectionString);
                     break;
                 default:
                     options.UseNpgsql(connectionString);

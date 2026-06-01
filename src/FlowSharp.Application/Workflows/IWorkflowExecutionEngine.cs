@@ -1,4 +1,5 @@
 using System.Text.Json;
+using FlowSharp.Application.Nodes;
 
 namespace FlowSharp.Application.Workflows;
 
@@ -12,6 +13,18 @@ public interface IWorkflowExecutionEngine
         JsonElement definition,
         JsonElement triggerPayload,
         WorkflowExecutionOptions? options = null,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Bir node'un dinamik parametre seceneklerini uretir (UI dropdown'lari icin).
+    /// Hedef node'un upstream zinciri calistirilir, ardindan node
+    /// <see cref="IHasDynamicOptions"/> implemente ediyorsa secenekler okunur.
+    /// Hedef node'un kendisi CALISTIRILMAZ (yan etki olmaz).
+    /// </summary>
+    Task<IReadOnlyList<NodeParameterOption>> LoadOptionsAsync(
+        JsonElement definition,
+        string nodeId,
+        string parameterKey,
         CancellationToken cancellationToken = default);
 }
 

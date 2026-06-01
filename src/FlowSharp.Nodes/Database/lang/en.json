@@ -1,4 +1,22 @@
 {
-  "postgres.query.displayName": "Postgres",
-  "postgres.query.description": "Runs a PostgreSQL query."
+  "db.postgres.connection.displayName": "Postgres Connection",
+  "db.postgres.connection.description": "Creates a reusable Postgres connection context for downstream database nodes.",
+  "db.sqlServer.connection.displayName": "SQL Server Connection",
+  "db.sqlServer.connection.description": "Creates a reusable SQL Server connection context for downstream database nodes.",
+  "db.mysql.connection.displayName": "MySQL Connection",
+  "db.mysql.connection.description": "Creates a reusable MySQL connection context for downstream database nodes.",
+  "db.table.displayName": "Table",
+  "db.table.description": "Selects a table from the upstream database connection and loads column metadata.",
+  "db.select.displayName": "Select",
+  "db.select.description": "Selects rows from the upstream database table.",
+  "db.insert.displayName": "Insert",
+  "db.insert.description": "Inserts a row into the upstream database table.",
+  "db.upsert.displayName": "Insert or Update",
+  "db.upsert.description": "Inserts a row or updates it when key columns already exist.",
+  "db.update.displayName": "Update",
+  "db.update.description": "Updates rows in the upstream database table.",
+  "db.delete.displayName": "Delete",
+  "db.delete.description": "Deletes rows from the upstream database table.",
+  "db.executeQuery.displayName": "Execute Query",
+  "db.executeQuery.description": "Executes a raw SQL query using the upstream database connection."
 }

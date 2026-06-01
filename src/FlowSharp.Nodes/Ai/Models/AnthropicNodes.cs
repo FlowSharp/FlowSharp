@@ -22,10 +22,11 @@ public sealed class AnthropicChatNode : AiChatNodeBase
             ModelParam("claude-3-5-sonnet-20241022")
         ],
         Tags: ["anthropic", "claude", "ai"],
-        Icon: "bot",
+        Icon: "robot",
         IsAiPowered: true,
         Color: "#d97706",
-        Credentials: ["anthropicApi"]
+        Credentials: ["anthropicApi"],
+        SubCategory: "AI Chat Nodes"
     );
 }
 
@@ -43,10 +44,11 @@ public sealed class AnthropicChatModelNode : NodeType
             new NodeParameterDefinition("model", "Model", NodeParameterType.String, DefaultValue: "claude-3-5-sonnet-20241022")
         ],
         Tags: ["anthropic", "claude", "ai"],
-        Icon: "bot",
+        Icon: "robot",
         Color: "#d97706",
         IsAiPowered: true,
         Credentials: ["anthropicApi"],
+        SubCategory: "AI Models",
         Inputs: [],
         Outputs: [new NodePort("model", "Model", NodePortType.AiModel)]
     );

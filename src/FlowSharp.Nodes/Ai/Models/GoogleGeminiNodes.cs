@@ -22,10 +22,11 @@ public sealed class GoogleGeminiChatNode : AiChatNodeBase
             ModelParam("gemini-2.5-flash")
         ],
         Tags: ["gemini", "google", "ai"],
-        Icon: "bot",
+        Icon: "robot",
         IsAiPowered: true,
         Color: "#4285f4",
-        Credentials: ["googleGeminiApi"]
+        Credentials: ["googleGeminiApi"],
+        SubCategory: "AI Chat Nodes"
     );
 }
 
@@ -43,10 +44,11 @@ public sealed class GoogleGeminiChatModelNode : NodeType
             new NodeParameterDefinition("model", "Model", NodeParameterType.String, DefaultValue: "gemini-2.5-flash")
         ],
         Tags: ["gemini", "google", "ai"],
-        Icon: "bot",
+        Icon: "robot",
         Color: "#4285f4",
         IsAiPowered: true,
         Credentials: ["googleGeminiApi"],
+        SubCategory: "AI Models",
         Inputs: [],
         Outputs: [new NodePort("model", "Model", NodePortType.AiModel)]
     );

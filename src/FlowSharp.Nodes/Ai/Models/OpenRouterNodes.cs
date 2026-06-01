@@ -22,10 +22,11 @@ public sealed class OpenRouterChatNode : AiChatNodeBase
             ModelParam("google/gemini-2.5-flash")
         ],
         Tags: ["openrouter", "ai"],
-        Icon: "bot",
+        Icon: "robot",
         IsAiPowered: true,
         Color: "#7c3aed",
-        Credentials: ["openRouterApi"]
+        Credentials: ["openRouterApi"],
+        SubCategory: "AI Chat Nodes"
     );
 }
 
@@ -43,10 +44,11 @@ public sealed class OpenRouterChatModelNode : NodeType
             new NodeParameterDefinition("model", "Model", NodeParameterType.String, DefaultValue: "google/gemini-2.5-flash")
         ],
         Tags: ["openrouter", "ai"],
-        Icon: "bot",
+        Icon: "robot",
         Color: "#7c3aed",
         IsAiPowered: true,
         Credentials: ["openRouterApi"],
+        SubCategory: "AI Models",
         Inputs: [],
         Outputs: [new NodePort("model", "Model", NodePortType.AiModel)]
     );

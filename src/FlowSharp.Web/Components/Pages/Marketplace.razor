@@ -19,11 +19,14 @@
         {
             <MudPaper Class="Fsharp-surface" Elevation="0">
                 <MudStack Spacing="2">
-                    <MudText Typo="Typo.h6">@L["marketplace.official"]</MudText>
+                    <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+                        <MudText Typo="Typo.h6">@L["marketplace.official"]</MudText>
+                        <MudChip T="string" Size="Size.Small" Color="Color.Success" Icon="@Icons.Material.Filled.VerifiedUser">@L["marketplace.official.trusted"]</MudChip>
+                    </MudStack>
                     <MudText Color="Color.Secondary">@L["marketplace.official.hint"]</MudText>
                     <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1">
                         <MudLink Href="@Plugins.OfficialMarketplaceUrl" Target="_blank">@Plugins.OfficialMarketplaceUrl</MudLink>
-                        <MudButton Variant="Variant.Outlined" Size="Size.Small" OnClick="() => repoUrl = Plugins.OfficialMarketplaceUrl!">
+                        <MudButton Variant="Variant.Outlined" Size="Size.Small" OnClick="UseOfficialAsync">
                             @L["marketplace.official.use_address"]
                         </MudButton>
                     </MudStack>
@@ -34,11 +37,10 @@
         <MudPaper Class="Fsharp-surface" Elevation="0">
             <MudStack Spacing="2">
                 <MudText Typo="Typo.h6">@L["marketplace.install_from_github"]</MudText>
-                <MudText Color="Color.Secondary">@L["marketplace.install_from_github.hint"]</MudText>
                 <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1" Class="Fsharp-input-row">
                     <MudTextField @bind-Value="repoUrl" Placeholder="https://github.com/owner/repo" Disabled="@busy" Variant="Variant.Outlined" Class="flex-grow-1" />
-                    <MudButton Color="Color.Primary" Variant="Variant.Filled" StartIcon="@Icons.Material.Filled.Download" OnClick="InstallAsync" Disabled="@(busy || string.IsNullOrWhiteSpace(repoUrl))">
-                        @(busy ? L["marketplace.installing"] : L["marketplace.install"])
+                    <MudButton Color="Color.Primary" Variant="Variant.Filled" StartIcon="@Icons.Material.Filled.Search" OnClick="BrowseAsync" Disabled="@(busy || string.IsNullOrWhiteSpace(repoUrl))">
+                        @(busy ? "..." : L["marketplace.browse"])
                     </MudButton>
                 </MudStack>
                 <MudAlert Severity="Severity.Warning" Variant="Variant.Outlined">@L["marketplace.warning"]</MudAlert>
@@ -48,6 +50,38 @@
         @if (message is not null)
         {
             <MudAlert Severity="@(isError ? Severity.Error : Severity.Success)" Variant="Variant.Filled">@message</MudAlert>
+        }
+
+        @if (available.Count > 0)
+        {
+            <MudPaper Class="Fsharp-surface" Elevation="0">
+                <MudText Typo="Typo.h6" Class="mb-3">@L["marketplace.available"]</MudText>
+                <MudTable Items="available" Dense="true" Hover="true" Elevation="0" Class="Fsharp-table">
+                    <HeaderContent>
+                        <MudTh>@L["marketplace.table.plugin"]</MudTh>
+                        <MudTh></MudTh>
+                    </HeaderContent>
+                    <RowTemplate>
+                        <MudTd DataLabel="@L["marketplace.table.plugin"]"><strong>@context.Name</strong></MudTd>
+                        <MudTd>
+                            <MudStack Row="true" Justify="Justify.FlexEnd">
+                                @if (context.Installed)
+                                {
+                                    <MudChip T="string" Size="Size.Small" Color="Color.Success">@L["marketplace.status.installed"]</MudChip>
+                                }
+                                else
+                                {
+                                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small"
+                                               StartIcon="@Icons.Material.Filled.Download"
+                                               OnClick="() => InstallAsync(context.Path)" Disabled="@busy">
+                                        @(busy ? L["marketplace.installing"] : L["marketplace.install"])
+                                    </MudButton>
+                                }
+                            </MudStack>
+                        </MudTd>
+                    </RowTemplate>
+                </MudTable>
+            </MudPaper>
         }
 
         <MudPaper Class="Fsharp-surface" Elevation="0">
@@ -105,21 +139,54 @@
     private string? message;
     private bool isError;
     private IReadOnlyList<PluginInfo> list = [];
+    private IReadOnlyList<MarketplacePlugin> available = [];
 
-    protected override void OnInitialized() => Refresh();
+    protected override async Task OnInitializedAsync()
+    {
+        Refresh();
+
+        // Varsayilan olarak guvenilir resmi depoyu doldur ve otomatik gozat.
+        if (!string.IsNullOrWhiteSpace(Plugins.OfficialMarketplaceUrl))
+        {
+            repoUrl = Plugins.OfficialMarketplaceUrl;
+            await BrowseAsync();
+        }
+    }
 
     private void Refresh() => list = Plugins.List();
 
-    private async Task InstallAsync()
+    private async Task UseOfficialAsync()
+    {
+        repoUrl = Plugins.OfficialMarketplaceUrl ?? "";
+        await BrowseAsync();
+    }
+
+    private async Task BrowseAsync()
     {
         busy = true; message = null;
         try
         {
-            var info = await Plugins.InstallFromGitHubAsync(repoUrl.Trim());
+            available = await Plugins.BrowseGitHubAsync(repoUrl.Trim());
+            if (available.Count == 0)
+            {
+                Set(L["marketplace.browse.empty"], true);
+            }
+        }
+        catch (Exception ex) { Set(ex.Message, true); }
+        finally { busy = false; }
+    }
+
+    private async Task InstallAsync(string pluginPath)
+    {
+        busy = true; message = null;
+        try
+        {
+            var info = await Plugins.InstallFromGitHubAsync(repoUrl.Trim(), string.IsNullOrEmpty(pluginPath) ? null : pluginPath);
             Set(info.Loaded
                 ? $"'{info.Name}' kuruldu ({info.Nodes.Count} node)."
                 : $"'{info.Name}' kuruldu ama yuklenemedi: {info.Error}", !info.Loaded);
-            repoUrl = "";
+            // Kurulan eklentiyi "kuruldu" olarak isaretle.
+            available = available.Select(p => p.Path == pluginPath ? p with { Installed = true } : p).ToList();
         }
         catch (Exception ex) { Set(ex.Message, true); }
         finally { busy = false; Refresh(); }

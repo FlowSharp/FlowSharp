@@ -27,7 +27,7 @@ namespace FlowSharp.Nodes.Triggers
                     HelpText: "AI cevabini destekleyen modellerde parca parca sohbet penceresine aktarir.")
             ],
             Tags: ["trigger", "ai"],
-            Icon: "message-circle",
+            Icon: "chat-dots",
             Color: "#10a37f",
             IsAiPowered: true);
 

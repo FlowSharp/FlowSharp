@@ -22,6 +22,7 @@ public partial class WorkflowDesigner : IAsyncDisposable
     [Inject] public ApplicationDbContext DbContext { get; set; } = default!;
     [Inject] public INodeCatalog NodeCatalog { get; set; } = default!;
     [Inject] public ICredentialStore CredentialStore { get; set; } = default!;
+    [Inject] public FlowSharp.Application.Credentials.ICredentialCatalog CredentialCatalog { get; set; } = default!;
     [Inject] public IWorkflowQueue Queue { get; set; } = default!;
     [Inject] public IWorkflowExecutionEngine Engine { get; set; } = default!;
     [Inject] public IWebhookRegistrar WebhookRegistrar { get; set; } = default!;
@@ -37,47 +38,19 @@ public partial class WorkflowDesigner : IAsyncDisposable
 
     private bool IsReadOnly => ExecutionId.HasValue;
 
+    // Ikon tamamen node'a aittir: node bir Bootstrap Icons adi verir (orn. "robot", "database"
+    // veya dogrudan "bi-robot"). Verilmezse varsayilan gosterilir. Burada artik takma ad/switch yok.
+    private const string DefaultIcon = "bi-box";
+
     private string GetIconClass(string? iconName)
     {
-        if (string.IsNullOrWhiteSpace(iconName)) return "bi-cpu";
-        return iconName.ToLowerInvariant() switch
-        {
-            "bot" => "bi-robot",
-            "email" or "envelope" => "bi-envelope",
-            "postgres" or "database" => "bi-database",
-            "webhook" or "trigger" => "bi-lightning-charge",
-            "manual" or "play" => "bi-play-circle",
-            "schedule" or "clock" => "bi-clock",
-            "code" or "script" => "bi-code-slash",
-            "merge" or "split" => "bi-bezier2",
-            "filter" => "bi-funnel",
-            "sliders" => "bi-sliders",
-            "globe" => "bi-globe",
-            "calculator" => "bi-calculator",
-            "telegram" => "bi-telegram",
-            "slack" => "bi-slack",
-            "discord" => "bi-discord",
-            _ => $"bi-{iconName.ToLowerInvariant()}"
-        };
+        if (string.IsNullOrWhiteSpace(iconName)) return DefaultIcon;
+        return iconName.StartsWith("bi-", StringComparison.OrdinalIgnoreCase)
+            ? iconName.ToLowerInvariant()
+            : $"bi-{iconName.ToLowerInvariant()}";
     }
 
-    private string GetAiSubCategory(NodeDefinition def)
-    {
-        if (def.Category != NodeCategory.Ai) return "Diğer";
-
-        if (def.IsSubNode)
-        {
-            var primarySubPort = def.SubOutputPorts.FirstOrDefault();
-            if (primarySubPort?.Type == NodePortType.AiModel) return "AI Models (Chat Models)";
-            if (primarySubPort?.Type == NodePortType.AiTool) return "AI Tools";
-            if (primarySubPort?.Type == NodePortType.AiMemory) return "AI Memory";
-            return "AI Sub-nodes";
-        }
-
-        if (def.Key == "ai.agent") return "AI Agents";
-        if (def.Key.StartsWith("rag.", StringComparison.OrdinalIgnoreCase)) return "AI Memory";
-        return "AI Chat Nodes (Main Akış)";
-    }
+    private static string? GetSubCategory(NodeDefinition def) => def.SubCategoryKey;
 
     private string workflowName = "New workflow";
     private string? description;
@@ -96,7 +69,7 @@ public partial class WorkflowDesigner : IAsyncDisposable
     private string? toast;
     private bool toastError;
 
-    private readonly HashSet<NodeCategory> expandedCats = [];
+    private readonly HashSet<string> expandedCats = [];
     private readonly HashSet<string> expandedSubCats = [];
     private bool showChat;
     private readonly List<ChatMessage> chatMessages = [];
@@ -177,7 +150,7 @@ public partial class WorkflowDesigner : IAsyncDisposable
 
                         if (outputNode.HasValue)
                         {
-                            runOutputs[nodeId] = new RunOutput(itemCount, JsonSerializer.Serialize(outputNode.Value, new JsonSerializerOptions { WriteIndented = true }));
+                            runOutputs[nodeId] = new RunOutput(itemCount, JsonSerializer.Serialize(outputNode.Value, DisplayJson));
                         }
                     }
                 }
@@ -197,8 +170,7 @@ public partial class WorkflowDesigner : IAsyncDisposable
             {
                 var node = nodes.FirstOrDefault(n => n.InstanceId == data.NodeId);
                 if (node is not null) node.Status = data.Status.ToString();
-                runOutputs[data.NodeId] = new RunOutput(data.ItemCount,
-                    data.Output.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
+                runOutputs[data.NodeId] = ToRunOutput(data);
                 StateHasChanged();
                 await SyncGraphAsync();
             });
@@ -281,7 +253,7 @@ public partial class WorkflowDesigner : IAsyncDisposable
             InstanceId = $"n{Guid.NewGuid():N}"[..9],
             NodeKey = "core.stickyNote",
             Name = UniqueName("Not / Grup"),
-            Category = NodeCategory.Core,
+            Category = "Core",
             X = (int)x,
             Y = (int)y
         };
@@ -344,12 +316,24 @@ public partial class WorkflowDesigner : IAsyncDisposable
     }
 
     [JSInvokable]
-    public Task OnNodeOpen(string id)
+    public async Task OnNodeOpen(string id)
     {
         openNodeId = id;
         selectedId = id;
+        dynOptions.Clear();
+        dynErrors.Clear();
+        dynLoading.Clear();
         StateHasChanged();
-        return Task.CompletedTask;
+
+        // Dinamik secenekli parametreleri otomatik yukle (upstream'i olan node'lar icin).
+        var node = openNode;
+        if (node is not null && HasAncestors(node) && Definition(node.NodeKey) is { } def)
+        {
+            foreach (var p in def.Parameters.Where(p => p.DynamicOptions))
+            {
+                await LoadDynamicOptionsAsync(node, p.Key);
+            }
+        }
     }
 
     [JSInvokable]
@@ -370,7 +354,7 @@ public partial class WorkflowDesigner : IAsyncDisposable
             InstanceId = $"n{Guid.NewGuid():N}"[..9],
             NodeKey = def.Key,
             Name = UniqueName(def.DisplayName),
-            Category = def.Category,
+            Category = def.CategoryDisplayName,
             X = 160 + nodes.Count % 4 * 60,
             Y = 120 + nodes.Count % 5 * 40
         };
@@ -468,7 +452,7 @@ public partial class WorkflowDesigner : IAsyncDisposable
     private void ToggleActive(ChangeEventArgs e) => isActive = e.Value is true;
 
     // ---------- Palette ----------
-    private IEnumerable<IGrouping<NodeCategory, NodeDefinition>> FilteredCatalog()
+    private IEnumerable<IGrouping<string, NodeDefinition>> FilteredCatalog()
     {
         var all = NodeCatalog.GetAll().AsEnumerable();
         if (!string.IsNullOrWhiteSpace(paletteSearch))
@@ -476,7 +460,7 @@ public partial class WorkflowDesigner : IAsyncDisposable
             all = all.Where(d => d.DisplayName.Contains(paletteSearch, StringComparison.OrdinalIgnoreCase)
                 || d.Key.Contains(paletteSearch, StringComparison.OrdinalIgnoreCase));
         }
-        return all.GroupBy(d => d.Category).OrderBy(g => g.Key);
+        return all.GroupBy(d => d.CategoryDisplayName).OrderBy(g => g.Key);
     }
 
     // ---------- Save / Execute ----------
@@ -519,8 +503,7 @@ public partial class WorkflowDesigner : IAsyncDisposable
                 {
                     var node = nodes.FirstOrDefault(n => n.InstanceId == data.NodeId);
                     if (node is not null) node.Status = data.Status.ToString();
-                    runOutputs[data.NodeId] = new RunOutput(data.ItemCount,
-                        data.Output.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
+                    runOutputs[data.NodeId] = ToRunOutput(data);
                     await InvokeAsync(StateHasChanged);
                     await SyncGraphAsync();
 
@@ -599,8 +582,9 @@ public partial class WorkflowDesigner : IAsyncDisposable
                 var id = item.GetProperty("id").GetString() ?? $"n{Guid.NewGuid():N}"[..9];
                 var type = item.GetProperty("type").GetString() ?? "manual.trigger";
                 var name = item.TryGetProperty("name", out var nEl) ? nEl.GetString() ?? type : type;
-                var category = item.TryGetProperty("category", out var cEl) && Enum.TryParse<NodeCategory>(cEl.GetString(), out var cat)
-                    ? cat : Definition(type)?.Category ?? NodeCategory.Core;
+                var category = item.TryGetProperty("category", out var cEl)
+                    ? cEl.GetString() ?? Definition(type)?.CategoryDisplayName ?? "Uncategorized"
+                    : Definition(type)?.CategoryDisplayName ?? "Uncategorized";
                 var x = item.TryGetProperty("position", out var pos) && pos.TryGetProperty("x", out var xv) ? xv.GetInt32() : 120;
                 var y = item.TryGetProperty("position", out pos) && pos.TryGetProperty("y", out var yv) ? yv.GetInt32() : 120;
 
@@ -658,8 +642,8 @@ public partial class WorkflowDesigner : IAsyncDisposable
     }
 
     // ---------- Palette (collapsible) ----------
-    private bool IsCatOpen(NodeCategory c) => !string.IsNullOrWhiteSpace(paletteSearch) || expandedCats.Contains(c);
-    private void ToggleCat(NodeCategory c) { if (!expandedCats.Remove(c)) expandedCats.Add(c); }
+    private bool IsCatOpen(string c) => !string.IsNullOrWhiteSpace(paletteSearch) || expandedCats.Contains(c);
+    private void ToggleCat(string c) { if (!expandedCats.Remove(c)) expandedCats.Add(c); }
     private bool IsSubCatOpen(string subCat) => !string.IsNullOrWhiteSpace(paletteSearch) || expandedSubCats.Contains(subCat);
     private void ToggleSubCat(string subCat) { if (!expandedSubCats.Remove(subCat)) expandedSubCats.Add(subCat); }
 
@@ -673,6 +657,88 @@ public partial class WorkflowDesigner : IAsyncDisposable
     }
 
     private string? UpstreamName(DesignerNode node) => UpstreamNode(node)?.Name;
+
+    // ---------- Dinamik parametre secenekleri (generic) ----------
+    // Her parametre anahtari icin yuklenen secenekleri/durumu tutar (node'a ozel kod yok).
+    private readonly Dictionary<string, List<FlowSharp.Application.Nodes.NodeParameterOption>> dynOptions = new();
+    private readonly HashSet<string> dynLoading = new();
+    private readonly Dictionary<string, string> dynErrors = new();
+
+    private IEnumerable<DesignerNode> Ancestors(DesignerNode node)
+    {
+        var visited = new HashSet<string>();
+        var stack = new Stack<DesignerNode>();
+        stack.Push(node);
+        while (stack.Count > 0)
+        {
+            var current = stack.Pop();
+            foreach (var conn in connections.Where(c => c.ToId == current.InstanceId))
+            {
+                var parent = nodes.FirstOrDefault(n => n.InstanceId == conn.FromId);
+                if (parent is not null && visited.Add(parent.InstanceId))
+                {
+                    yield return parent;
+                    stack.Push(parent);
+                }
+            }
+        }
+    }
+
+    // Bir database operasyon/table node'unun zincirinde connection node var mi?
+    private bool HasUpstreamConnection(DesignerNode node) =>
+        Ancestors(node).Any(n => n.NodeKey.EndsWith(".connection", StringComparison.Ordinal));
+
+    // Bir parametrenin dinamik seceneklerini generic olarak yukler. Motor, hedef node'un
+    // upstream zincirini calistirip (hedefi CALISTIRMADAN) IHasDynamicOptions'tan secenekleri doner.
+    private async Task LoadDynamicOptionsAsync(DesignerNode node, string parameterKey)
+    {
+        dynLoading.Add(parameterKey);
+        dynErrors.Remove(parameterKey);
+        StateHasChanged();
+        try
+        {
+            using var doc = BuildDefinition();
+            var options = await Engine.LoadOptionsAsync(doc.RootElement, node.InstanceId, parameterKey);
+            dynOptions[parameterKey] = options.ToList();
+            if (options.Count == 0)
+            {
+                dynErrors[parameterKey] = "Secenek bulunamadi.";
+            }
+        }
+        catch (Exception ex)
+        {
+            dynErrors[parameterKey] = ex.Message;
+        }
+        finally
+        {
+            dynLoading.Remove(parameterKey);
+            StateHasChanged();
+        }
+    }
+
+    private bool HasAncestors(DesignerNode node) =>
+        connections.Any(c => c.ToId == node.InstanceId);
+
+    // Kosullu gorunurluk: ShowWhen tanimliysa, hedef alanin guncel degeri izin verilen degerlerden
+    // biri degilse parametre gizlenir. Tanim yoksa her zaman gorunur.
+    private bool IsParamVisible(DesignerNode node, NodeParameterDefinition p)
+    {
+        // Upstream'den devralinan alan (orn. override Table): bir ata node ayni alani sagliyorsa gizlenir.
+        // Boylece Table'a bagli Select'te tekrar tablo sorulmaz; tek basinaysa gorunur.
+        if (p.InheritsUpstream && Ancestors(node).Any(a => !string.IsNullOrWhiteSpace(GetParam(a, p.Key))))
+        {
+            return false;
+        }
+
+        if (p.ShowWhen is not { } cond)
+        {
+            return true;
+        }
+
+        var current = GetParam(node, cond.Field)
+            ?? Definition(node.NodeKey)?.Parameters.FirstOrDefault(x => x.Key == cond.Field)?.DefaultValue;
+        return current is not null && cond.Values.Contains(current, StringComparer.OrdinalIgnoreCase);
+    }
 
     private string? UpstreamOutput(DesignerNode node)
     {
@@ -782,37 +848,34 @@ public partial class WorkflowDesigner : IAsyncDisposable
     }
 
     // ---------- Credential inline add ----------
+    // Alanlar artik credential semasindan (ICredentialCatalog) gelir; isimden tahmin yok.
     private void StartCredAdd(NodeDefinition def, string paramKey)
     {
         credAddOpen = true;
         credAddParamKey = paramKey;
         credAddName = "";
         credAddFields.Clear();
-        foreach (var field in DefaultCredFields(def.CredentialKeys.FirstOrDefault()))
+
+        var type = def.CredentialKeys.FirstOrDefault();
+        var schema = type is not null ? CredentialCatalog.Find(type) : null;
+        if (schema is not null)
         {
-            credAddFields.Add(new CredField { Key = field });
+            foreach (var field in schema.Fields)
+            {
+                credAddFields.Add(new CredField
+                {
+                    Key = field.Key,
+                    Label = field.Label,
+                    FieldType = field.Type,
+                    FromSchema = true,
+                    Value = field.DefaultValue
+                });
+            }
         }
+
+        // Sema yoksa (bilinmeyen/generic tip) tek serbest alanla basla.
         if (credAddFields.Count == 0) credAddFields.Add(new CredField { Key = "apiKey" });
     }
-
-    // Yalniz gizli alanlar maskelenir; host/port/user gibi alanlar duz metin gosterilir.
-    private static readonly string[] SecretFieldKeywords =
-        ["password", "secret", "token", "apikey", "key", "connectionstring"];
-
-    private static bool IsSecretField(string? key) =>
-        !string.IsNullOrWhiteSpace(key) &&
-        SecretFieldKeywords.Any(keyword => key.Replace("_", "").Contains(keyword, StringComparison.OrdinalIgnoreCase));
-
-    private static IEnumerable<string> DefaultCredFields(string? type) => type switch
-    {
-        "smtp" or "imap" => ["host", "port", "user", "password"],
-        "slackApi" or "telegramApi" => ["token"],
-        "openAiApi" or "googleGeminiApi" or "anthropicApi" or "groqApi" or "mistralApi" or "cohereApi" or "huggingFaceApi" or "openRouterApi" => ["apiKey"],
-        "azureOpenAiApi" => ["apiKey", "endpoint", "deploymentName"],
-        "ollamaApi" => ["endpoint"],
-        "postgres" => ["connectionString"],
-        _ => ["apiKey"]
-    };
 
     private async Task SaveCredAddAsync(NodeDefinition def, string paramKey)
     {
@@ -866,8 +929,7 @@ public partial class WorkflowDesigner : IAsyncDisposable
                 {
                     var node = nodes.FirstOrDefault(n => n.InstanceId == data.NodeId);
                     if (node is not null) node.Status = data.Status.ToString();
-                    runOutputs[data.NodeId] = new RunOutput(data.ItemCount,
-                        data.Output.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
+                    runOutputs[data.NodeId] = ToRunOutput(data);
                     await InvokeAsync(StateHasChanged);
                     await SyncGraphAsync();
 
@@ -950,7 +1012,7 @@ public partial class WorkflowDesigner : IAsyncDisposable
         public required string InstanceId { get; init; }
         public required string NodeKey { get; init; }
         public required string Name { get; set; }
-        public required NodeCategory Category { get; init; }
+        public required string Category { get; init; }
         public int X { get; set; }
         public int Y { get; set; }
         public string Status { get; set; } = "";
@@ -959,7 +1021,19 @@ public partial class WorkflowDesigner : IAsyncDisposable
 
     private sealed record DesignerConnection(string FromId, int FromPort, string ToId, int ToPort);
 
-    private sealed record RunOutput(int ItemCount, string Json);
+    // Gosterim icin JSON: Unicode'u (Turkce dahil) escape etmeden, okunabilir yazar.
+    private static readonly JsonSerializerOptions DisplayJson = new()
+    {
+        WriteIndented = true,
+        Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping
+    };
+
+    private static RunOutput ToRunOutput(NodeRunData data) =>
+        new(data.ItemCount,
+            data.Output.ToJsonString(DisplayJson),
+            data.Status == NodeRunStatus.Failed ? data.Error : null);
+
+    private sealed record RunOutput(int ItemCount, string Json, string? Error = null);
 
     private sealed class ChatMessage(bool isUser, string text)
     {
@@ -971,5 +1045,10 @@ public partial class WorkflowDesigner : IAsyncDisposable
     {
         public string Key { get; set; } = "";
         public string? Value { get; set; }
+        // Sema'dan gelen alanlarda render tipini ve etiketini tasir; serbest alanlarda String/key.
+        public string? Label { get; set; }
+        public FlowSharp.Domain.Credentials.CredentialFieldType FieldType { get; set; }
+            = FlowSharp.Domain.Credentials.CredentialFieldType.String;
+        public bool FromSchema { get; set; }
     }
 }

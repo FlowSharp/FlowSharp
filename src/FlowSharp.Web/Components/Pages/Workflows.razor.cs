@@ -18,6 +18,7 @@ public partial class Workflows
 {
     [Inject] public ApplicationDbContext DbContext { get; set; } = default!;
     [Inject] public IWorkflowQueue Queue { get; set; } = default!;
+    [Inject] public IWorkflowRunner Runner { get; set; } = default!;
     [Inject] public IWebhookRegistrar WebhookRegistrar { get; set; } = default!;
     [Inject] public NavigationManager Navigation { get; set; } = default!;
     [Inject] public IAuthorizationService AuthorizationService { get; set; } = default!;
@@ -27,6 +28,7 @@ public partial class Workflows
     private string? message;
     private bool canWrite;
     private bool canExecute;
+    private Guid? runningId;
 
     protected override async Task OnInitializedAsync()
     {
@@ -50,8 +52,22 @@ public partial class Workflows
             return;
         }
 
-        await Queue.EnqueueAsync(id, JsonDocument.Parse("""{"source":"manual"}"""));
-        await Flash("Workflow kuyruga alindi.");
+        runningId = id;
+        StateHasChanged();
+        try
+        {
+            var result = await Runner.ExecuteNowAsync(id, JsonDocument.Parse("""{"source":"manual"}"""));
+            await Flash(result.Succeeded ? "Workflow basariyla calisti." : $"Hata: {result.Error}");
+        }
+        catch (Exception ex)
+        {
+            await Flash($"Hata: {ex.Message}");
+        }
+        finally
+        {
+            runningId = null;
+            StateHasChanged();
+        }
     }
 
     private async Task DeleteAsync(Guid id)

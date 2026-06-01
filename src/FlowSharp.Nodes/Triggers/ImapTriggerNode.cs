@@ -3,8 +3,11 @@ using MailKit;
 using MailKit.Net.Imap;
 using MailKit.Search;
 using MailKit.Security;
+using FlowSharp.Application.Credentials;
 using FlowSharp.Application.Nodes;
+using FlowSharp.Domain.Credentials;
 using FlowSharp.Domain.Nodes;
+using FlowSharp.Nodes.Credentials;
 
 namespace FlowSharp.Nodes.Triggers;
 
@@ -14,8 +17,11 @@ namespace FlowSharp.Nodes.Triggers;
 /// her birini bir cikis item'i olarak dondurur. "imap" tipli credential alanlari:
 /// host, port, user, password, secure (true/false).
 /// </summary>
-public sealed class ImapTriggerNode : NodeType
+public sealed class ImapTriggerNode : NodeType, IProvidesCredentials
 {
+    public IEnumerable<CredentialSchema> CredentialSchemas =>
+        [new CredentialSchema("imap", "IMAP", CredentialFields.Mail())];
+
     public override NodeDefinition Definition { get; } = new(
         Key: "email.imap.trigger",
         DisplayName: "Email Trigger (IMAP)",
@@ -33,7 +39,7 @@ public sealed class ImapTriggerNode : NodeType
             new NodeParameterDefinition("limit", "Maks. mail", NodeParameterType.Number, DefaultValue: "20")
         ],
         Tags: ["trigger"],
-        Icon: "mail",
+        Icon: "envelope",
         Color: "#7d7d87",
         Credentials: ["imap"]);
 

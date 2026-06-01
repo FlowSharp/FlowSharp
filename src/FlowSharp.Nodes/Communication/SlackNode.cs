@@ -1,5 +1,8 @@
-﻿using FlowSharp.Application.Nodes;
+﻿using FlowSharp.Application.Credentials;
+using FlowSharp.Application.Nodes;
+using FlowSharp.Domain.Credentials;
 using FlowSharp.Domain.Nodes;
+using FlowSharp.Nodes.Credentials;
 using FlowSharp.Nodes.Helpers;
 using System.Net.Http.Headers;
 using System.Text;
@@ -8,8 +11,11 @@ using System.Text.Json.Nodes;
 namespace FlowSharp.Nodes.Communication
 {
     /// <summary>Slack'e gercek mesaj gonderir (chat.postMessage). Credential "slackApi": token (Bot Token).</summary>
-    public sealed class SlackNode : PerItemNodeType
+    public sealed class SlackNode : PerItemNodeType, IProvidesCredentials
     {
+        public IEnumerable<CredentialSchema> CredentialSchemas =>
+            [new CredentialSchema("slackApi", "Slack", CredentialFields.Token())];
+
         public override NodeDefinition Definition { get; } = new(
             "slack.message", "Slack", NodeCategory.Communication, NodeKind.Action, "Slack kanalina mesaj gonderir.",
             [

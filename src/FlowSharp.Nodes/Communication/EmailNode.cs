@@ -2,8 +2,11 @@ using System.Text.Json.Nodes;
 using MailKit.Net.Smtp;
 using MailKit.Security;
 using MimeKit;
+using FlowSharp.Application.Credentials;
 using FlowSharp.Application.Nodes;
+using FlowSharp.Domain.Credentials;
 using FlowSharp.Domain.Nodes;
+using FlowSharp.Nodes.Credentials;
 
 namespace FlowSharp.Nodes.Communication;
 
@@ -12,8 +15,11 @@ namespace FlowSharp.Nodes.Communication;
 /// host, port, user, password, secure (true/false). Implicit SSL (465), STARTTLS (587)
 /// ve sifresiz baglanti desteklenir.
 /// </summary>
-public sealed class EmailNode : PerItemNodeType
+public sealed class EmailNode : PerItemNodeType, IProvidesCredentials
 {
+    public IEnumerable<CredentialSchema> CredentialSchemas =>
+        [new CredentialSchema("smtp", "SMTP", CredentialFields.Mail())];
+
     public override NodeDefinition Definition { get; } = new(
         Key: "email.send",
         DisplayName: "Send Email",
@@ -31,7 +37,7 @@ public sealed class EmailNode : PerItemNodeType
             new NodeParameterDefinition("isHtml", "HTML?", NodeParameterType.Boolean, DefaultValue: "false")
         ],
         Tags: ["communication"],
-        Icon: "mail",
+        Icon: "envelope",
         Color: "#2f80ed",
         Credentials: ["smtp"]);
 

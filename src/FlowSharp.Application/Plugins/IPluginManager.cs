@@ -11,6 +11,9 @@ public sealed record PluginInfo(
     IReadOnlyList<PluginNodeInfo> Nodes,
     DateTimeOffset? LoadedAt);
 
+/// <summary>Bir marketplace deposunda kuruluma hazir bekleyen bir plugin.</summary>
+public sealed record MarketplacePlugin(string Name, string Path, bool Installed);
+
 /// <summary>
 /// "plugins/" klasorundeki topluluk plugin'lerini yonetir: her plugin bir alt klasordur,
 /// icindeki tum .cs kaynak dosyalari Roslyn ile calisma zamaninda derlenip yuklenir ve
@@ -33,6 +36,12 @@ public interface IPluginManager
     /// <summary>Plugin'i kayittan cikarir ve klasorunu siler.</summary>
     Task RemoveAsync(string name, CancellationToken cancellationToken = default);
 
-    /// <summary>Bir GitHub deposundan plugin indirir, plugins klasorune yazar ve yukler.</summary>
-    Task<PluginInfo> InstallFromGitHubAsync(string repoUrl, CancellationToken cancellationToken = default);
+    /// <summary>Bir GitHub marketplace deposundaki kuruluma hazir plugin'leri listeler (kurmaz).</summary>
+    Task<IReadOnlyList<MarketplacePlugin>> BrowseGitHubAsync(string repoUrl, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Bir GitHub deposundan tek bir plugin indirir, plugins klasorune yazar ve yukler.
+    /// <paramref name="pluginPath"/> verilirse depo icindeki o alt klasor kurulur; bos ise tum depo.
+    /// </summary>
+    Task<PluginInfo> InstallFromGitHubAsync(string repoUrl, string? pluginPath = null, CancellationToken cancellationToken = default);
 }

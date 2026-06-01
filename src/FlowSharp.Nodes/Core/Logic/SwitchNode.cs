@@ -27,7 +27,7 @@ public sealed class SwitchNode : NodeType
                 DefaultValue: "[{\"value\":\"a\",\"output\":0},{\"value\":\"b\",\"output\":1}]")
         ],
         Tags: ["core", "logic"],
-        Icon: "git-fork",
+        Icon: "bezier2",
         Color: "#408000",
         Outputs:
         [

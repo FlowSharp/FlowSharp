@@ -26,5 +26,12 @@ public static class DatabaseMigrationExtensions
             dbContext.Database.ProviderName);
         await dbContext.Database.EnsureCreatedAsync();
         logger.LogInformation("Database schema exists.");
+
+        // SQLite: WAL modu okuyuculari yazicidan ayirir; Web + Worker es zamanli erisiminde
+        // kilitlenmeyi buyuk olcude onler. WAL dosya basliginda kalici olur, bir kez yeter.
+        if (dbContext.Database.IsSqlite())
+        {
+            await dbContext.Database.ExecuteSqlRawAsync("PRAGMA journal_mode=WAL;");
+        }
     }
 }

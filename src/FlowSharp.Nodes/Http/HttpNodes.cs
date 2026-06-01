@@ -20,7 +20,8 @@ public abstract class HttpNodeBase : PerItemNodeType
         new("headers", "Headers (JSON)", NodeParameterType.Json, DefaultValue: "{}");
 
     protected static NodeParameterDefinition BodyParam =>
-        new("body", "Body (JSON)", NodeParameterType.Json, DefaultValue: "{}");
+        new("body", "Body (JSON)", NodeParameterType.Json, DefaultValue: "{}",
+            ShowWhen: new ParameterCondition("method", ["POST", "PUT", "PATCH"]));
 
     protected override async Task<NodeItem?> ProcessItemAsync(INodeExecutionContext context, NodeItem item, int index)
     {

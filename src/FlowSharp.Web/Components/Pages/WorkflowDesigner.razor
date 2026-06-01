@@ -4,6 +4,7 @@
 @rendermode InteractiveServer
 @using Microsoft.AspNetCore.Authorization
 @using FlowSharp.Domain.Nodes
+@using FlowSharp.Domain.Credentials
 @using FlowSharp.Domain.Security
 
 @attribute [Authorize(Policy = AppPermissions.WorkflowsWrite)]
@@ -239,9 +240,9 @@
                 </div>
                 @if (open)
                 {
-                    @if (group.Key == NodeCategory.Ai)
+                    @if (group.Any(def => GetSubCategory(def) is not null))
                     {
-                        var subGroups = group.GroupBy(GetAiSubCategory).OrderBy(g => g.Key);
+                        var subGroups = group.GroupBy(def => GetSubCategory(def)!).OrderBy(g => g.Key);
                         @foreach (var subGroup in subGroups)
                         {
                             var subOpen = IsSubCatOpen(subGroup.Key);
@@ -363,9 +364,21 @@
                         </div>
                     }
 
+                    @if (def is not null && def.Category == NodeCategory.Database
+                        && !openNode.NodeKey.EndsWith(".connection", StringComparison.Ordinal)
+                        && !HasUpstreamConnection(openNode))
+                    {
+                        <div class="field">
+                            <div class="expr-hint expr-err">
+                                ⚠ Bu node bir database connection node'una bağlı değil.
+                                Önce <strong>Connection</strong> (→ <strong>Table</strong>) node'una bağlayın.
+                            </div>
+                        </div>
+                    }
+
                     @if (def is not null && def.Parameters.Count > 0)
                     {
-                        @foreach (var p in def.Parameters)
+                        @foreach (var p in def.Parameters.Where(p => IsParamVisible(openNode, p)))
                         {
                             <div class="field">
                                 <label>@p.Label @(p.IsRequired ? "*" : "")</label>
@@ -393,9 +406,33 @@
                                             @foreach (var f in credAddFields)
                                             {
                                                 <div class="cred-row">
-                                                    <input class="input" placeholder="@L["credentials.form.key_placeholder"]" @bind="f.Key" />
-                                                    <input class="input" type="@(IsSecretField(f.Key) ? "password" : "text")" placeholder="@L["credentials.form.value_placeholder"]" @bind="f.Value" />
-                                                    <button class="btn btn-danger btn-sm" @onclick="() => credAddFields.Remove(f)">−</button>
+                                                    @if (f.FromSchema)
+                                                    {
+                                                        <label class="cred-key-label" style="align-self:center">@f.Label</label>
+                                                    }
+                                                    else
+                                                    {
+                                                        <input class="input" placeholder="@L["credentials.form.key_placeholder"]" @bind="f.Key" />
+                                                    }
+                                                    @if (f.FieldType == CredentialFieldType.Boolean)
+                                                    {
+                                                        <label class="input" style="display:flex; align-items:center; gap:8px">
+                                                            <input type="checkbox"
+                                                                   checked="@string.Equals(f.Value, "true", StringComparison.OrdinalIgnoreCase)"
+                                                                   @onchange='e => f.Value = e.Value is true ? "true" : "false"' />
+                                                            <span>@(string.Equals(f.Value, "true", StringComparison.OrdinalIgnoreCase) ? "true" : "false")</span>
+                                                        </label>
+                                                    }
+                                                    else
+                                                    {
+                                                        <input class="input"
+                                                               type="@(f.FieldType == CredentialFieldType.Secret ? "password" : f.FieldType == CredentialFieldType.Number ? "number" : "text")"
+                                                               placeholder="@L["credentials.form.value_placeholder"]" @bind="f.Value" />
+                                                    }
+                                                    @if (!f.FromSchema)
+                                                    {
+                                                        <button class="btn btn-danger btn-sm" @onclick="() => credAddFields.Remove(f)">−</button>
+                                                    }
                                                 </div>
                                             }
                                             <button class="btn btn-ghost btn-sm" @onclick="() => credAddFields.Add(new())">+ @L["designer.ndv.add_field"]</button>
@@ -448,6 +485,38 @@
                                         }
                                     </select>
                                 }
+                                else if (p.DynamicOptions)
+                                {
+                                    var cur = GetParam(openNode, p.Key);
+                                    var opts = dynOptions.TryGetValue(p.Key, out var list) ? list : null;
+                                    var loading = dynLoading.Contains(p.Key);
+                                    <div style="display:flex; gap:6px; align-items:center">
+                                        <select class="select" value="@cur"
+                                                @onchange="e => SetParam(openNode, p.Key, e.Value?.ToString())" disabled="@IsReadOnly">
+                                            <option value="" selected="@string.IsNullOrWhiteSpace(cur)">— Seç —</option>
+                                            @if (opts is not null)
+                                            {
+                                                @foreach (var opt in opts)
+                                                {
+                                                    <option value="@opt.Value" selected="@(opt.Value == cur)">@opt.Label</option>
+                                                }
+                                            }
+                                            @if (!string.IsNullOrWhiteSpace(cur) && (opts is null || !opts.Any(o => o.Value == cur)))
+                                            {
+                                                <option value="@cur" selected>@cur</option>
+                                            }
+                                        </select>
+                                        <button class="btn btn-ghost btn-sm" title="Yenile"
+                                                @onclick="() => LoadDynamicOptionsAsync(openNode, p.Key)"
+                                                disabled="@(IsReadOnly || loading)">
+                                            @(loading ? "…" : "↻")
+                                        </button>
+                                    </div>
+                                    @if (dynErrors.TryGetValue(p.Key, out var dErr) && !string.IsNullOrWhiteSpace(dErr))
+                                    {
+                                        <div class="expr-hint expr-err">@dErr</div>
+                                    }
+                                }
                                 else
                                 {
                                     var prev = PreviewExpression(openNode, GetParam(openNode, p.Key));
@@ -480,8 +549,15 @@
                     <h3>@L["designer.ndv.output"]</h3>
                     @if (NodeOutput(openNode.InstanceId) is { } output)
                     {
-                        <div class="hint" style="margin-bottom:6px">@output.ItemCount @L["designer.ndv.items"]</div>
-                        <div class="ndv-data"><pre>@output.Json</pre></div>
+                        @if (!string.IsNullOrWhiteSpace(output.Error))
+                        {
+                            <div class="ndv-data expr-err"><pre>@output.Error</pre></div>
+                        }
+                        else
+                        {
+                            <div class="hint" style="margin-bottom:6px">@output.ItemCount @L["designer.ndv.items"]</div>
+                            <div class="ndv-data"><pre>@output.Json</pre></div>
+                        }
                     }
                     else
                     {

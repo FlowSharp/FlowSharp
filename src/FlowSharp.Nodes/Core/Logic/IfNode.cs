@@ -24,7 +24,7 @@ public sealed class IfNode : NodeType
             new NodeParameterDefinition("value2", "Value 2", NodeParameterType.String)
         ],
         Tags: ["core", "logic"],
-        Icon: "git-branch",
+        Icon: "diagram-2",
         Color: "#408000",
         Outputs:
         [

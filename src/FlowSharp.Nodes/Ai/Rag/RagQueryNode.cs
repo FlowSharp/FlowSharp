@@ -28,7 +28,8 @@ public sealed class RagQueryNode : NodeType
         ],
         Tags: ["ai", "rag", "vector"],
         Icon: "database",
-        Color: "#10a37f");
+        Color: "#10a37f",
+        SubCategory: "AI Memory");
 
     public override async Task<NodeExecutionResult> ExecuteAsync(INodeExecutionContext context)
     {
@@ -84,6 +85,7 @@ public sealed class RagMemoryNode : NodeType
         Tags: ["ai", "rag", "memory", "vector"],
         Icon: "database",
         Color: "#10a37f",
+        SubCategory: "AI Memory",
         Inputs: [],
         Outputs: [new NodePort("memory", "Memory", NodePortType.AiMemory)]);
 

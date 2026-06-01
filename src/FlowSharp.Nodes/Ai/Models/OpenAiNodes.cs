@@ -22,10 +22,11 @@ public sealed class OpenAiChatNode : AiChatNodeBase
             ModelParam("gpt-4o-mini")
         ],
         Tags: ["openai", "ai"],
-        Icon: "bot",
+        Icon: "robot",
         IsAiPowered: true,
         Color: "#10a37f",
-        Credentials: ["openAiApi"]
+        Credentials: ["openAiApi"],
+        SubCategory: "AI Chat Nodes"
     );
 }
 
@@ -43,10 +44,11 @@ public sealed class OpenAiChatModelNode : NodeType
             new NodeParameterDefinition("model", "Model", NodeParameterType.String, DefaultValue: "gpt-4o-mini")
         ],
         Tags: ["openai", "ai"],
-        Icon: "bot",
+        Icon: "robot",
         Color: "#10a37f",
         IsAiPowered: true,
         Credentials: ["openAiApi"],
+        SubCategory: "AI Models",
         Inputs: [],
         Outputs: [new NodePort("model", "Model", NodePortType.AiModel)]
     );

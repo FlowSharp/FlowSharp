@@ -281,6 +281,124 @@ public sealed class WorkflowExecutionEngine(
         return new WorkflowRunResult(true, null, BuildOutput(outputsByName, runLog), runLog);
     }
 
+    public async Task<IReadOnlyList<NodeParameterOption>> LoadOptionsAsync(
+        JsonElement definition,
+        string nodeId,
+        string parameterKey,
+        CancellationToken cancellationToken = default)
+    {
+        var nodes = ParseNodes(definition);
+        var connections = ParseConnections(definition);
+        var target = nodes.FirstOrDefault(n => n.Id == nodeId);
+        if (target is null || registry.Find(target.Type) is not IHasDynamicOptions provider)
+        {
+            return [];
+        }
+
+        // Hedefin tum atalari (transitif upstream). Hedef ve onun cikis baglantilari haric tutulur.
+        var incoming = BuildIncoming(connections);
+        var ancestorIds = new HashSet<string>(StringComparer.Ordinal);
+        var stack = new Stack<string>();
+        stack.Push(nodeId);
+        while (stack.Count > 0)
+        {
+            var current = stack.Pop();
+            foreach (var conn in incoming.GetValueOrDefault(current) ?? [])
+            {
+                if (ancestorIds.Add(conn.FromId))
+                {
+                    stack.Push(conn.FromId);
+                }
+            }
+        }
+
+        // Atalardan olusan kucuk bir tanim calistir; her node'un birincil ciktisini yakala.
+        var trimmedNodes = nodes.Where(n => ancestorIds.Contains(n.Id)).ToList();
+        var trimmedConnections = connections.Where(c => ancestorIds.Contains(c.FromId) && ancestorIds.Contains(c.ToId)).ToList();
+        var captured = new Dictionary<string, IReadOnlyList<NodeItem>>(StringComparer.Ordinal);
+
+        if (trimmedNodes.Count > 0)
+        {
+            using var trimmedDoc = BuildDefinitionDocument(trimmedNodes, trimmedConnections);
+            await ExecuteAsync(trimmedDoc.RootElement,
+                JsonDocument.Parse("""{"source":"manual"}""").RootElement,
+                new WorkflowExecutionOptions
+                {
+                    OnNodeCompleted = data =>
+                    {
+                        captured[data.NodeId] = ToItems(data.Output);
+                        return Task.CompletedTask;
+                    }
+                },
+                cancellationToken);
+        }
+
+        // Hedefin girisi: dogrudan upstream'lerinin ciktilarinin birlesimi (state buradan gelir).
+        var input = new List<NodeItem>();
+        foreach (var conn in incoming.GetValueOrDefault(nodeId) ?? [])
+        {
+            if (captured.TryGetValue(conn.FromId, out var items))
+            {
+                input.AddRange(items);
+            }
+        }
+
+        var outputsByName = captured
+            .Where(pair => trimmedNodes.Any(n => n.Id == pair.Key))
+            .ToDictionary(
+                pair => trimmedNodes.First(n => n.Id == pair.Key).Name,
+                pair => pair.Value,
+                StringComparer.OrdinalIgnoreCase);
+
+        var context = new NodeExecutionContext(
+            target.Type, target.Name, target.Parameters,
+            input.Count > 0 ? input : [NodeItem.Empty()],
+            outputsByName, new JsonObject(), runIndex: 0, evaluator, services,
+            _ => { }, cancellationToken);
+
+        return await provider.LoadOptionsAsync(context, parameterKey);
+    }
+
+    private static List<NodeItem> ToItems(JsonNode? output)
+    {
+        var items = new List<NodeItem>();
+        if (output is JsonArray array)
+        {
+            foreach (var element in array)
+            {
+                if (element is JsonObject obj)
+                {
+                    items.Add(NodeItem.From((JsonObject)obj.DeepClone()));
+                }
+            }
+        }
+
+        return items;
+    }
+
+    private static JsonDocument BuildDefinitionDocument(List<EngineNode> nodes, List<Connection> connections)
+    {
+        var def = new JsonObject
+        {
+            ["nodes"] = new JsonArray(nodes.Select(n => (JsonNode)new JsonObject
+            {
+                ["id"] = n.Id,
+                ["type"] = n.Type,
+                ["name"] = n.Name,
+                ["parameters"] = n.Parameters.DeepClone()
+            }).ToArray()),
+            ["connections"] = new JsonArray(connections.Select(c => (JsonNode)new JsonObject
+            {
+                ["from"] = c.FromId,
+                ["fromPort"] = c.FromPort,
+                ["to"] = c.ToId,
+                ["toPort"] = c.ToPort
+            }).ToArray())
+        };
+
+        return JsonDocument.Parse(def.ToJsonString());
+    }
+
     private const string LoopType = "flow.loopOverItems";
 
     /// <summary>

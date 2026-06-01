@@ -1,5 +1,8 @@
-﻿using FlowSharp.Application.Nodes;
+﻿using FlowSharp.Application.Credentials;
+using FlowSharp.Application.Nodes;
+using FlowSharp.Domain.Credentials;
 using FlowSharp.Domain.Nodes;
+using FlowSharp.Nodes.Credentials;
 using FlowSharp.Nodes.Helpers;
 using System.Text;
 using System.Text.Json.Nodes;
@@ -7,8 +10,11 @@ using System.Text.Json.Nodes;
 namespace FlowSharp.Nodes.Communication
 {
     /// <summary>Telegram'a gercek mesaj gonderir. Credential "telegramApi": token (Bot Token).</summary>
-    public sealed class TelegramNode : PerItemNodeType
+    public sealed class TelegramNode : PerItemNodeType, IProvidesCredentials
     {
+        public IEnumerable<CredentialSchema> CredentialSchemas =>
+            [new CredentialSchema("telegramApi", "Telegram", CredentialFields.Token())];
+
         public override NodeDefinition Definition { get; } = new(
             "telegram.message", "Telegram", NodeCategory.Communication, NodeKind.Action, "Telegram sohbetine mesaj gonderir.",
             [

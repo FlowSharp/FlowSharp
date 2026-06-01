@@ -79,7 +79,9 @@ public sealed class NodeRegistry : INodeRegistry
     private IReadOnlyList<NodeDefinition> BuildDefinitions() =>
         executables.Values
             .Select(nodeType => nodeType.Definition)
-            .OrderBy(definition => definition.Category)
+            .OrderBy(definition => definition.CategoryKey)
+            .ThenBy(definition => definition.SubCategoryKey)
+            .ThenBy(definition => definition.SortOrder)
             .ThenBy(definition => definition.DisplayName)
             .ToArray();
 }

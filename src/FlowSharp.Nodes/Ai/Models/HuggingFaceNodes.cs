@@ -22,10 +22,11 @@ public sealed class HuggingFaceChatNode : AiChatNodeBase
             ModelParam("meta-llama/Llama-3.3-70B-Instruct")
         ],
         Tags: ["huggingface", "ai"],
-        Icon: "bot",
+        Icon: "robot",
         IsAiPowered: true,
         Color: "#eab308",
-        Credentials: ["huggingFaceApi"]
+        Credentials: ["huggingFaceApi"],
+        SubCategory: "AI Chat Nodes"
     );
 }
 
@@ -43,10 +44,11 @@ public sealed class HuggingFaceChatModelNode : NodeType
             new NodeParameterDefinition("model", "Model", NodeParameterType.String, DefaultValue: "meta-llama/Llama-3.3-70B-Instruct")
         ],
         Tags: ["huggingface", "ai"],
-        Icon: "bot",
+        Icon: "robot",
         Color: "#eab308",
         IsAiPowered: true,
         Credentials: ["huggingFaceApi"],
+        SubCategory: "AI Models",
         Inputs: [],
         Outputs: [new NodePort("model", "Model", NodePortType.AiModel)]
     );

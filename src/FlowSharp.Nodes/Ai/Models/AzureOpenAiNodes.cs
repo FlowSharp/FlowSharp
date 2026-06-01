@@ -1,4 +1,5 @@
 using FlowSharp.Application.Nodes;
+using FlowSharp.Domain.Credentials;
 using FlowSharp.Domain.Nodes;
 
 namespace FlowSharp.Nodes.Ai.Models;
@@ -8,6 +9,16 @@ public sealed class AzureOpenAiChatNode : AiChatNodeBase
     protected override string Provider => "azureopenai";
     protected override string CredentialType => "azureOpenAiApi";
     protected override string DefaultModel => "gpt-4o-mini";
+
+    public override IEnumerable<CredentialSchema> CredentialSchemas =>
+    [
+        new CredentialSchema("azureOpenAiApi", "Azure OpenAI",
+        [
+            new CredentialFieldSchema("apiKey", "API Key", CredentialFieldType.Secret, IsRequired: true),
+            new CredentialFieldSchema("endpoint", "Endpoint", CredentialFieldType.String, IsRequired: true, Placeholder: "https://...openai.azure.com"),
+            new CredentialFieldSchema("deploymentName", "Deployment Name", CredentialFieldType.String, IsRequired: true)
+        ])
+    ];
 
     public override NodeDefinition Definition { get; } = new(
         Key: "azureopenai.chat",
@@ -22,10 +33,11 @@ public sealed class AzureOpenAiChatNode : AiChatNodeBase
             new NodeParameterDefinition("model", "Deployment Name", NodeParameterType.String, HelpText: "Azure deployment adi (bos birakilirsa credential'daki deploymentName kullanilir).")
         ],
         Tags: ["azure", "openai", "ai"],
-        Icon: "bot",
+        Icon: "robot",
         IsAiPowered: true,
         Color: "#0078d4",
-        Credentials: ["azureOpenAiApi"]
+        Credentials: ["azureOpenAiApi"],
+        SubCategory: "AI Chat Nodes"
     );
 }
 
@@ -43,10 +55,11 @@ public sealed class AzureOpenAiChatModelNode : NodeType
             new NodeParameterDefinition("model", "Deployment Name", NodeParameterType.String, HelpText: "Azure deployment adi (bos ise credential'daki deploymentName kullanilir).")
         ],
         Tags: ["azure", "openai", "ai"],
-        Icon: "bot",
+        Icon: "robot",
         Color: "#0078d4",
         IsAiPowered: true,
         Credentials: ["azureOpenAiApi"],
+        SubCategory: "AI Models",
         Inputs: [],
         Outputs: [new NodePort("model", "Model", NodePortType.AiModel)]
     );

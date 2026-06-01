@@ -18,7 +18,7 @@ public sealed class MergeNode : NodeType
         Description: "Iki veya daha fazla dali tek akista birlestirir.",
         Parameters: [],
         Tags: ["core", "logic"],
-        Icon: "git-merge",
+        Icon: "diagram-3",
         Color: "#9b59b6");
 
     public override Task<NodeExecutionResult> ExecuteAsync(INodeExecutionContext context) =>

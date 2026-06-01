@@ -21,6 +21,7 @@ namespace FlowSharp.Nodes.Ai.Tools
             Tags: ["ai", "tool"],
             Icon: "globe",
             Color: "#7d3cff",
+            SubCategory: "AI Tools",
             Inputs: [],
             Outputs: [new NodePort("tool", "Tool", NodePortType.AiTool)]);
 

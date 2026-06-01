@@ -23,7 +23,7 @@ public sealed class LoopOverItemsNode : NodeType
                 DefaultValue: "1", HelpText: "Her turda islenecek item sayisi.")
         ],
         Tags: ["core", "flow"],
-        Icon: "merge",
+        Icon: "arrow-repeat",
         Color: "#7d7d87",
         Outputs:
         [

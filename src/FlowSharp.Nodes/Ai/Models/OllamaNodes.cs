@@ -1,4 +1,5 @@
 using FlowSharp.Application.Nodes;
+using FlowSharp.Domain.Credentials;
 using FlowSharp.Domain.Nodes;
 
 namespace FlowSharp.Nodes.Ai.Models;
@@ -8,6 +9,12 @@ public sealed class OllamaChatNode : AiChatNodeBase
     protected override string Provider => "ollama";
     protected override string CredentialType => "ollamaApi";
     protected override string DefaultModel => "llama3.1";
+
+    public override IEnumerable<CredentialSchema> CredentialSchemas =>
+    [
+        new CredentialSchema("ollamaApi", "Ollama",
+            [new CredentialFieldSchema("endpoint", "Endpoint", CredentialFieldType.String, DefaultValue: "http://localhost:11434")])
+    ];
 
     public override NodeDefinition Definition { get; } = new(
         Key: "ollama.chat",
@@ -22,10 +29,11 @@ public sealed class OllamaChatNode : AiChatNodeBase
             ModelParam("llama3.1")
         ],
         Tags: ["ollama", "local", "ai"],
-        Icon: "bot",
+        Icon: "robot",
         IsAiPowered: true,
         Color: "#6b7280",
-        Credentials: ["ollamaApi"]
+        Credentials: ["ollamaApi"],
+        SubCategory: "AI Chat Nodes"
     );
 }
 
@@ -43,10 +51,11 @@ public sealed class OllamaChatModelNode : NodeType
             new NodeParameterDefinition("model", "Model", NodeParameterType.String, DefaultValue: "llama3.1")
         ],
         Tags: ["ollama", "local", "ai"],
-        Icon: "bot",
+        Icon: "robot",
         Color: "#6b7280",
         IsAiPowered: true,
         Credentials: ["ollamaApi"],
+        SubCategory: "AI Models",
         Inputs: [],
         Outputs: [new NodePort("model", "Model", NodePortType.AiModel)]
     );

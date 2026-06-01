@@ -20,8 +20,17 @@ public sealed record NodeDefinition(
     int Version = 1,
     IReadOnlyList<NodePort>? Inputs = null,
     IReadOnlyList<NodePort>? Outputs = null,
-    IReadOnlyList<string>? Credentials = null)
+    IReadOnlyList<string>? Credentials = null,
+    string? CategoryName = null,
+    string? SubCategory = null,
+    int SortOrder = 0)
 {
+    public string CategoryKey => string.IsNullOrWhiteSpace(CategoryName) ? Category.ToString() : CategoryName;
+
+    public string CategoryDisplayName => CategoryKey;
+
+    public string? SubCategoryKey => string.IsNullOrWhiteSpace(SubCategory) ? null : SubCategory;
+
     /// <summary>Giris portlari. Bos birakilirsa tek bir "main" giris kabul edilir (trigger'larda bos olabilir).</summary>
     public IReadOnlyList<NodePort> InputPorts => Inputs ?? (Kind == NodeKind.Trigger ? [] : [NodePort.Main]);
 

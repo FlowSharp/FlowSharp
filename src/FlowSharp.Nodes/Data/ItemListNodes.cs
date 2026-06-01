@@ -62,23 +62,102 @@ public sealed class LimitNode : NodeType
     }
 }
 
-/// <summary>Tum item'lari tek bir item icinde bir diziye toplar.</summary>
+/// <summary>
+/// Item'lari toplar: tek diziye toplama (collect) veya sayisal bir alanda
+/// count/sum/avg/min/max. "Group By" verilirse her grup ayri bir item olur.
+/// </summary>
 public sealed class AggregateNode : NodeType
 {
     public override NodeDefinition Definition { get; } = new(
-        "aggregate.items", "Aggregate", NodeCategory.Data, NodeKind.Transform, "Tum item'lari tek item'da toplar.",
-        [new NodeParameterDefinition("destinationField", "Destination Field", NodeParameterType.String, DefaultValue: "data")],
+        "aggregate.items", "Aggregate", NodeCategory.Data, NodeKind.Transform,
+        "Item'lari toplar; collect/count/sum/avg/min/max ve opsiyonel Group By.",
+        [
+            new NodeParameterDefinition("operation", "Operation", NodeParameterType.Select, DefaultValue: "collect",
+                Options: ["collect", "count", "sum", "avg", "min", "max"]),
+            new NodeParameterDefinition("groupBy", "Group By", NodeParameterType.String,
+                HelpText: "Opsiyonel. Bu alana gore gruplar; her grup bir item olur."),
+            new NodeParameterDefinition("field", "Field", NodeParameterType.String,
+                HelpText: "sum/avg/min/max icin sayisal alan adi.",
+                ShowWhen: new ParameterCondition("operation", ["sum", "avg", "min", "max"])),
+            new NodeParameterDefinition("destinationField", "Destination Field", NodeParameterType.String, DefaultValue: "data",
+                HelpText: "collect islemi icin dizi alani adi.",
+                ShowWhen: new ParameterCondition("operation", ["collect"]))
+        ],
         ["data"], "sigma", Color: "#0aa06e");
 
     public override Task<NodeExecutionResult> ExecuteAsync(INodeExecutionContext context)
     {
-        var field = context.GetString("destinationField") ?? "data";
-        var array = new JsonArray();
-        foreach (var item in context.Items)
+        var operation = (context.GetString("operation") ?? "collect").ToLowerInvariant();
+        var groupBy = context.GetString("groupBy");
+        var field = context.GetString("field");
+        var destinationField = context.GetString("destinationField") ?? "data";
+
+        if (string.IsNullOrWhiteSpace(groupBy))
         {
-            array.Add(item.Json.DeepClone());
+            var single = new JsonObject();
+            Fill(single, context.Items, operation, field, destinationField);
+            return Task.FromResult(NodeExecutionResult.Single(NodeItem.From(single)));
         }
-        return Task.FromResult(NodeExecutionResult.Single(NodeItem.From(new JsonObject { [field] = array })));
+
+        var outputs = new List<NodeItem>();
+        foreach (var group in context.Items.GroupBy(item => item.Json[groupBy]?.ToString() ?? "null"))
+        {
+            var members = group.ToList();
+            var obj = new JsonObject { [groupBy] = members[0].Json[groupBy]?.DeepClone() };
+            Fill(obj, members, operation, field, destinationField);
+            outputs.Add(NodeItem.From(obj));
+        }
+
+        return Task.FromResult(NodeExecutionResult.Single(outputs));
+    }
+
+    private static void Fill(JsonObject obj, IReadOnlyList<NodeItem> items, string operation, string? field, string destinationField)
+    {
+        obj["count"] = items.Count;
+
+        if (operation == "collect")
+        {
+            var array = new JsonArray();
+            foreach (var item in items)
+            {
+                array.Add(item.Json.DeepClone());
+            }
+            obj[destinationField] = array;
+            return;
+        }
+
+        if (operation == "count")
+        {
+            return; // count zaten yazildi
+        }
+
+        var values = items
+            .Select(item => string.IsNullOrWhiteSpace(field) ? null : TryGetNumber(item.Json[field]))
+            .Where(value => value.HasValue)
+            .Select(value => value!.Value)
+            .ToList();
+
+        double result = values.Count == 0 ? 0 : operation switch
+        {
+            "avg" => values.Average(),
+            "min" => values.Min(),
+            "max" => values.Max(),
+            _ => values.Sum()
+        };
+
+        obj["field"] = field;
+        obj[operation] = result;
+    }
+
+    private static double? TryGetNumber(JsonNode? node)
+    {
+        if (node is JsonValue value)
+        {
+            if (value.TryGetValue<double>(out var d)) return d;
+            if (value.TryGetValue<string>(out var s) &&
+                double.TryParse(s, NumberStyles.Any, CultureInfo.InvariantCulture, out var parsed)) return parsed;
+        }
+        return null;
     }
 }
 

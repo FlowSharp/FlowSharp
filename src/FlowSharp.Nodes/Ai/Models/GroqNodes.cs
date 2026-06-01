@@ -22,10 +22,11 @@ public sealed class GroqChatNode : AiChatNodeBase
             ModelParam("llama-3.3-70b-versatile")
         ],
         Tags: ["groq", "llama", "ai"],
-        Icon: "bot",
+        Icon: "robot",
         IsAiPowered: true,
         Color: "#f55036",
-        Credentials: ["groqApi"]
+        Credentials: ["groqApi"],
+        SubCategory: "AI Chat Nodes"
     );
 }
 
@@ -43,10 +44,11 @@ public sealed class GroqChatModelNode : NodeType
             new NodeParameterDefinition("model", "Model", NodeParameterType.String, DefaultValue: "llama-3.3-70b-versatile")
         ],
         Tags: ["groq", "llama", "ai"],
-        Icon: "bot",
+        Icon: "robot",
         Color: "#f55036",
         IsAiPowered: true,
         Credentials: ["groqApi"],
+        SubCategory: "AI Models",
         Inputs: [],
         Outputs: [new NodePort("model", "Model", NodePortType.AiModel)]
     );

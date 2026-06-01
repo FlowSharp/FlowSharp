@@ -76,34 +76,62 @@ public sealed class PluginManager(
             }
         }, cancellationToken);
 
-    public async Task<PluginInfo> InstallFromGitHubAsync(string repoUrl, CancellationToken cancellationToken = default)
+    public async Task<IReadOnlyList<MarketplacePlugin>> BrowseGitHubAsync(string repoUrl, CancellationToken cancellationToken = default)
     {
         var (owner, repo, branch, subPath) = ParseGitHubUrl(repoUrl);
-        Directory.CreateDirectory(PluginsRoot);
+        var (zipBytes, usedBranch) = await DownloadRepoZipAsync(owner, repo, branch, cancellationToken);
 
-        var client = httpClientFactory.CreateClient("workflow-nodes");
-        var branches = branch is not null ? [branch] : new[] { "main", "master" };
+        using var archive = new ZipArchive(new MemoryStream(zipBytes), ZipArchiveMode.Read);
+        var basePrefix = $"{repo}-{usedBranch}/" + (string.IsNullOrEmpty(subPath) ? "" : subPath.Trim('/') + "/");
 
-        byte[]? zipBytes = null;
-        string usedBranch = branches[0];
-        foreach (var b in branches)
+        // Her plugin, depodaki bir ust-duzey klasordur (icinde .cs olan). Kokte .cs varsa tum
+        // depo tek plugin sayilir. Sadece .cs iceren klasorler kuruluma hazir kabul edilir.
+        var folders = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var rootHasCs = false;
+        foreach (var entry in archive.Entries)
         {
-            var url = $"https://codeload.github.com/{owner}/{repo}/zip/refs/heads/{b}";
-            using var resp = await client.GetAsync(url, cancellationToken);
-            if (resp.IsSuccessStatusCode)
+            if (entry.FullName.EndsWith('/') ||
+                !entry.FullName.StartsWith(basePrefix, StringComparison.Ordinal) ||
+                !entry.FullName.EndsWith(".cs", StringComparison.OrdinalIgnoreCase))
             {
-                zipBytes = await resp.Content.ReadAsByteArrayAsync(cancellationToken);
-                usedBranch = b;
-                break;
+                continue;
+            }
+
+            var relative = entry.FullName[basePrefix.Length..];
+            var slash = relative.IndexOf('/');
+            if (slash < 0)
+            {
+                rootHasCs = true;
+            }
+            else
+            {
+                folders.Add(relative[..slash]);
             }
         }
 
-        if (zipBytes is null)
+        var result = new List<MarketplacePlugin>();
+        if (rootHasCs)
         {
-            throw new InvalidOperationException($"'{owner}/{repo}' deposu indirilemedi (branch: {string.Join("/", branches)}).");
+            result.Add(new MarketplacePlugin(repo, "", IsInstalled(repo)));
         }
 
-        var pluginName = SafeName(string.IsNullOrEmpty(subPath) ? repo : Path.GetFileName(subPath.TrimEnd('/')));
+        foreach (var folder in folders.OrderBy(f => f, StringComparer.OrdinalIgnoreCase))
+        {
+            result.Add(new MarketplacePlugin(folder, folder, IsInstalled(folder)));
+        }
+
+        return result;
+    }
+
+    public async Task<PluginInfo> InstallFromGitHubAsync(string repoUrl, string? pluginPath = null, CancellationToken cancellationToken = default)
+    {
+        var (owner, repo, branch, urlSubPath) = ParseGitHubUrl(repoUrl);
+        var subPath = CombinePath(urlSubPath, pluginPath);
+        Directory.CreateDirectory(PluginsRoot);
+
+        var (zipBytes, usedBranch) = await DownloadRepoZipAsync(owner, repo, branch, cancellationToken);
+
+        var pluginName = SafeName(string.IsNullOrEmpty(subPath) ? repo : LastSegment(subPath));
         var targetDir = Path.Combine(PluginsRoot, pluginName);
         if (Directory.Exists(targetDir))
         {
@@ -138,6 +166,46 @@ public sealed class PluginManager(
 
         return await Task.Run(() => LoadPlugin(pluginName), cancellationToken);
     }
+
+    private async Task<(byte[] Zip, string Branch)> DownloadRepoZipAsync(
+        string owner, string repo, string? branch, CancellationToken cancellationToken)
+    {
+        var client = httpClientFactory.CreateClient("workflow-nodes");
+        var branches = branch is not null ? [branch] : new[] { "main", "master" };
+
+        foreach (var b in branches)
+        {
+            var url = $"https://codeload.github.com/{owner}/{repo}/zip/refs/heads/{b}";
+            using var resp = await client.GetAsync(url, cancellationToken);
+            if (resp.IsSuccessStatusCode)
+            {
+                return (await resp.Content.ReadAsByteArrayAsync(cancellationToken), b);
+            }
+        }
+
+        throw new InvalidOperationException($"'{owner}/{repo}' deposu indirilemedi (branch: {string.Join("/", branches)}).");
+    }
+
+    private bool IsInstalled(string folder)
+    {
+        var safe = SafeName(folder);
+        lock (gate)
+        {
+            return plugins.ContainsKey(safe);
+        }
+    }
+
+    private static string CombinePath(string? a, string? b)
+    {
+        var left = a?.Trim('/') ?? "";
+        var right = b?.Trim('/') ?? "";
+        if (left.Length == 0) return right;
+        if (right.Length == 0) return left;
+        return $"{left}/{right}";
+    }
+
+    private static string LastSegment(string path) =>
+        path.TrimEnd('/').Split('/', StringSplitOptions.RemoveEmptyEntries)[^1];
 
     private PluginInfo LoadPlugin(string name)
     {
@@ -267,7 +335,7 @@ public sealed class PluginManager(
 
             registry.Register(node);
             keys.Add(node.Definition.Key);
-            nodeInfos.Add(new PluginNodeInfo(node.Definition.Key, node.Definition.DisplayName, node.Definition.Category.ToString()));
+            nodeInfos.Add(new PluginNodeInfo(node.Definition.Key, node.Definition.DisplayName, node.Definition.CategoryKey));
         }
 
         var info = new PluginInfo(name, true, null, nodeInfos, DateTimeOffset.UtcNow);

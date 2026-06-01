@@ -23,9 +23,10 @@ public sealed class AiAgentNode : NodeType
                 DefaultValue: "{{$json.text}}", HelpText: "Kullanici mesaji / gorev.")
         ],
         Tags: ["ai"],
-        Icon: "bot",
+        Icon: "robot",
         Color: "#10a37f",
         IsAiPowered: true,
+        SubCategory: "AI Agents",
         Inputs:
         [
             NodePort.Main,

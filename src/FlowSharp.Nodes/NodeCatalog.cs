@@ -19,6 +19,12 @@ public sealed class NodeCatalog(INodeRegistry registry, INodeTranslationStore tr
     public IReadOnlyList<NodeDefinition> GetByCategory(NodeCategory category) =>
         registry.Definitions.Where(node => node.Category == category).Select(Localize).ToArray();
 
+    public IReadOnlyList<NodeDefinition> GetByCategory(string category) =>
+        registry.Definitions
+            .Where(node => node.CategoryKey.Equals(category, StringComparison.OrdinalIgnoreCase))
+            .Select(Localize)
+            .ToArray();
+
     public NodeDefinition? Find(string key)
     {
         var def = registry.Definitions.FirstOrDefault(node => node.Key.Equals(key, StringComparison.OrdinalIgnoreCase));

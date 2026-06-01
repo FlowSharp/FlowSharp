@@ -32,7 +32,8 @@ public sealed class RagInsertNode : NodeType
         ],
         Tags: ["ai", "rag", "vector"],
         Icon: "database",
-        Color: "#10a37f");
+        Color: "#10a37f",
+        SubCategory: "AI Memory");
 
     public override async Task<NodeExecutionResult> ExecuteAsync(INodeExecutionContext context)
     {

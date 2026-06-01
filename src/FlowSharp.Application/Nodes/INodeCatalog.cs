@@ -8,5 +8,7 @@ public interface INodeCatalog
 
     IReadOnlyList<NodeDefinition> GetByCategory(NodeCategory category);
 
+    IReadOnlyList<NodeDefinition> GetByCategory(string category);
+
     NodeDefinition? Find(string key);
 }

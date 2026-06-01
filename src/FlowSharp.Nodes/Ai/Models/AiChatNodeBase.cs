@@ -1,18 +1,25 @@
 using System.Text.Json.Nodes;
 using Microsoft.SemanticKernel;
+using FlowSharp.Application.Credentials;
 using FlowSharp.Application.Nodes;
+using FlowSharp.Domain.Credentials;
 using FlowSharp.Domain.Nodes;
+using FlowSharp.Nodes.Credentials;
 
 namespace FlowSharp.Nodes.Ai.Models;
 
 /// <summary>
 /// Tüm AI sağlayıcıları için ortak sohbet tamamlaması yapan taban sınıf.
 /// </summary>
-public abstract class AiChatNodeBase : PerItemNodeType
+public abstract class AiChatNodeBase : PerItemNodeType, IProvidesCredentials
 {
     protected abstract string Provider { get; }
     protected abstract string CredentialType { get; }
     protected abstract string DefaultModel { get; }
+
+    // Varsayilan: sadece API Key. Azure/Ollama gibi farkli alan isteyenler override eder.
+    public virtual IEnumerable<CredentialSchema> CredentialSchemas =>
+        [new CredentialSchema(CredentialType, Provider, CredentialFields.ApiKey())];
 
     protected static NodeParameterDefinition PromptParam =>
         new("prompt", "Prompt", NodeParameterType.Text, IsRequired: true,

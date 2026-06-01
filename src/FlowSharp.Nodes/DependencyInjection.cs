@@ -23,6 +23,19 @@ public static class WorkflowNodesDependencyInjection
         services.AddSingleton<INodeRegistry, NodeRegistry>();
         services.AddSingleton<INodeCatalog, NodeCatalog>();
 
+        // Credential tipleri de node'lar gibi otomatik kesfedilir (plugin'ler ekleyebilir).
+        var credentialTypes = typeof(WorkflowNodesDependencyInjection).Assembly
+            .GetTypes()
+            .Where(type => type is { IsAbstract: false, IsInterface: false, IsClass: true }
+                && typeof(FlowSharp.Application.Credentials.ICredentialType).IsAssignableFrom(type));
+
+        foreach (var type in credentialTypes)
+        {
+            services.AddSingleton(typeof(FlowSharp.Application.Credentials.ICredentialType), type);
+        }
+
+        services.AddSingleton<FlowSharp.Application.Credentials.ICredentialCatalog, FlowSharp.Nodes.Credentials.CredentialCatalog>();
+
         // AI Agent orkestrasyonu: provider'a ozel mantik generic motorda degil burada yasar.
         services.AddScoped<FlowSharp.Application.Nodes.Agents.IAgentExecutor, FlowSharp.Nodes.Ai.Agent.SemanticKernelAgentExecutor>();
 

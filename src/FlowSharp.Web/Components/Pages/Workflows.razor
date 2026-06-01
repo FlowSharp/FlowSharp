@@ -60,7 +60,7 @@
                                         </MudChip>
                                     </MudStack>
                                     <MudText Typo="Typo.body2" Color="Color.Secondary">@(string.IsNullOrWhiteSpace(wf.Description) ? L["workflows.no_description"] : wf.Description)</MudText>
-                                    <MudText Typo="Typo.caption" Color="Color.Secondary">v@wf.Version</MudText>
+                                    <MudText Typo="Typo.caption" Color="Color.Secondary">v@(wf.Version)</MudText>
                                 </MudStack>
                             </MudCardContent>
                             <MudCardActions>
@@ -70,7 +70,19 @@
                                 }
                                 @if (canExecute)
                                 {
-                                    <MudButton Variant="Variant.Text" Color="Color.Success" StartIcon="@Icons.Material.Filled.PlayArrow" OnClick="() => RunAsync(wf.Id)">@L["common.run"]</MudButton>
+                                    <MudButton Variant="Variant.Text" Color="Color.Success"
+                                               StartIcon="@(runningId == wf.Id ? null : Icons.Material.Filled.PlayArrow)"
+                                               Disabled="@(runningId == wf.Id)" OnClick="() => RunAsync(wf.Id)">
+                                        @if (runningId == wf.Id)
+                                        {
+                                            <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+                                            <span>Çalıştırılıyor…</span>
+                                        }
+                                        else
+                                        {
+                                            @L["common.run"]
+                                        }
+                                    </MudButton>
                                 }
                                 <MudSpacer />
                                 @if (canWrite)

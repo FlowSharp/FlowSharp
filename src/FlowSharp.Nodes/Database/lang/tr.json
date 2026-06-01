@@ -1,4 +1,22 @@
 {
-  "postgres.query.displayName": "Postgres",
-  "postgres.query.description": "Bir PostgreSQL sorgusu çalıştırır."
+  "db.postgres.connection.displayName": "Postgres Bağlantısı",
+  "db.postgres.connection.description": "Alt database node'ları için yeniden kullanılabilir Postgres bağlantı bağlamı oluşturur.",
+  "db.sqlServer.connection.displayName": "SQL Server Bağlantısı",
+  "db.sqlServer.connection.description": "Alt database node'ları için yeniden kullanılabilir SQL Server bağlantı bağlamı oluşturur.",
+  "db.mysql.connection.displayName": "MySQL Bağlantısı",
+  "db.mysql.connection.description": "Alt database node'ları için yeniden kullanılabilir MySQL bağlantı bağlamı oluşturur.",
+  "db.table.displayName": "Tablo",
+  "db.table.description": "Üst database bağlantısından tablo seçer ve kolon metadata'sını yükler.",
+  "db.select.displayName": "Select",
+  "db.select.description": "Üst database tablosundan satır seçer.",
+  "db.insert.displayName": "Insert",
+  "db.insert.description": "Üst database tablosuna satır ekler.",
+  "db.upsert.displayName": "Insert or Update",
+  "db.upsert.description": "Key kolonlar zaten varsa satırı günceller, yoksa ekler.",
+  "db.update.displayName": "Update",
+  "db.update.description": "Üst database tablosundaki satırları günceller.",
+  "db.delete.displayName": "Delete",
+  "db.delete.description": "Üst database tablosundaki satırları siler.",
+  "db.executeQuery.displayName": "Execute Query",
+  "db.executeQuery.description": "Üst database bağlantısını kullanarak ham SQL sorgusu çalıştırır."
 }

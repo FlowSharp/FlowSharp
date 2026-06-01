@@ -14,7 +14,7 @@ public sealed class NoOpNode : NodeType
         Description: "Veriyi degistirmeden gecirir.",
         Parameters: [],
         Tags: ["core"],
-        Icon: "circle-dashed");
+        Icon: "record-circle");
 
     public override Task<NodeExecutionResult> ExecuteAsync(INodeExecutionContext context) =>
         Task.FromResult(NodeExecutionResult.Single(context.Items));
