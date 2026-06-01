@@ -23,7 +23,7 @@ src/
 | **UI** | Blazor Web App (Interactive Server) | Live dashboard, visual designer canvas. |
 | **Backend** | ASP.NET Core (.NET 10) | Host API, websocket connections. |
 | **Realtime Updates** | SignalR + Redis | Updates node status execution live in the browser. |
-| **Database** | PostgreSQL + EF Core | Stores workflows (JSONB definitions) and executions. |
+| **Database** | PostgreSQL, SQL Server, or SQLite + EF Core | Stores workflows, JSON definitions, executions, and queue jobs. |
 | **Queue** | DB-backed queue | Uses PostgreSQL-backed `workflow_jobs` table for reliable job processing. |
 | **Worker** | Background Service | Separate daemon consuming jobs from the database queue. |
 | **Plugins** | Roslyn C# Compiler | Hot-compiles C# source code files and loads assemblies dynamically. |

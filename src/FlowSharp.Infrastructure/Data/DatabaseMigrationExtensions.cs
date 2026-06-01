@@ -13,8 +13,18 @@ public static class DatabaseMigrationExtensions
         var logger = scope.ServiceProvider.GetRequiredService<ILogger<ApplicationDbContext>>();
         var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
 
-        logger.LogInformation("Applying pending EF Core migrations.");
-        await dbContext.Database.MigrateAsync();
-        logger.LogInformation("EF Core migrations are up to date.");
+        if (dbContext.Database.IsNpgsql())
+        {
+            logger.LogInformation("Applying pending EF Core migrations.");
+            await dbContext.Database.MigrateAsync();
+            logger.LogInformation("EF Core migrations are up to date.");
+            return;
+        }
+
+        logger.LogWarning(
+            "No provider-specific migrations are available for {Provider}. Ensuring database schema exists.",
+            dbContext.Database.ProviderName);
+        await dbContext.Database.EnsureCreatedAsync();
+        logger.LogInformation("Database schema exists.");
     }
 }
