@@ -75,6 +75,7 @@ public partial class WorkflowDesigner : IAsyncDisposable
         }
 
         if (def.Key == "ai.agent") return "AI Agents";
+        if (def.Key.StartsWith("rag.", StringComparison.OrdinalIgnoreCase)) return "AI Memory";
         return "AI Chat Nodes (Main Akış)";
     }
 
@@ -101,6 +102,8 @@ public partial class WorkflowDesigner : IAsyncDisposable
     private readonly List<ChatMessage> chatMessages = [];
     private string? chatInput;
     private bool chatBusy;
+    private bool ShowTyping => chatBusy &&
+        (chatMessages.LastOrDefault() is not { IsUser: false } lastBot || string.IsNullOrWhiteSpace(lastBot.Text));
     private bool credAddOpen;
     private string? credAddParamKey;
     private string credAddName = "";
@@ -371,10 +374,7 @@ public partial class WorkflowDesigner : IAsyncDisposable
             X = 160 + nodes.Count % 4 * 60,
             Y = 120 + nodes.Count % 5 * 40
         };
-        foreach (var p in def.Parameters.Where(p => p.DefaultValue is not null))
-        {
-            node.Parameters[p.Key] = p.DefaultValue!;
-        }
+        ApplyDefaultParameters(node);
         nodes.Add(node);
         selectedId = node.InstanceId;
         needsSync = true;
@@ -605,6 +605,7 @@ public partial class WorkflowDesigner : IAsyncDisposable
                 var y = item.TryGetProperty("position", out pos) && pos.TryGetProperty("y", out var yv) ? yv.GetInt32() : 120;
 
                 var node = new DesignerNode { InstanceId = id, NodeKey = type, Name = name, Category = category, X = x, Y = y };
+                ApplyDefaultParameters(node);
                 if (item.TryGetProperty("parameters", out var prms) && prms.ValueKind == JsonValueKind.Object)
                 {
                     foreach (var prop in prms.EnumerateObject())
@@ -630,6 +631,20 @@ public partial class WorkflowDesigner : IAsyncDisposable
                     connections.Add(new DesignerConnection(from, fromPort, to, toPort));
                 }
             }
+        }
+    }
+
+    private void ApplyDefaultParameters(DesignerNode node)
+    {
+        var def = Definition(node.NodeKey);
+        if (def is null)
+        {
+            return;
+        }
+
+        foreach (var parameter in def.Parameters.Where(parameter => parameter.DefaultValue is not null))
+        {
+            node.Parameters.TryAdd(parameter.Key, parameter.DefaultValue!);
         }
     }
 
@@ -717,6 +732,14 @@ public partial class WorkflowDesigner : IAsyncDisposable
         {
             current = upItems[0];
         }
+        else if (IsAgentMemoryNode(node))
+        {
+            current = NodeItem.From(new JsonObject
+            {
+                ["input"] = "Agent input",
+                ["text"] = "Agent input"
+            });
+        }
 
         return new FlowSharp.Application.Nodes.Expressions.ExpressionContext
         {
@@ -724,6 +747,13 @@ public partial class WorkflowDesigner : IAsyncDisposable
             ItemIndex = 0,
             NodeOutputs = outputs
         };
+    }
+
+    private bool IsAgentMemoryNode(DesignerNode node)
+    {
+        var def = Definition(node.NodeKey);
+        return def is { IsSubNode: true } &&
+            def.SubOutputPorts.Any(port => port.Type == NodePortType.AiMemory);
     }
 
     private static IReadOnlyList<NodeItem> ParseItems(string? json)
@@ -807,26 +837,76 @@ public partial class WorkflowDesigner : IAsyncDisposable
         if (string.IsNullOrEmpty(message) || chatBusy) return;
 
         chatMessages.Add(new ChatMessage(true, message));
+        var botMessage = new ChatMessage(false, "");
+        chatMessages.Add(botMessage);
         chatInput = "";
         chatBusy = true;
+        foreach (var n in nodes) n.Status = "";
+        runOutputs.Clear();
         StateHasChanged();
 
         try
         {
             var payload = JsonDocument.Parse(JsonSerializer.Serialize(new { source = "chat", chatInput = message, text = message }));
+            var chatStreamEnabled = IsChatStreamEnabled();
+            var options = new WorkflowExecutionOptions
+            {
+                WorkflowId = WorkflowId,
+                OnTextDelta = chatStreamEnabled
+                    ? async delta =>
+                    {
+                        await InvokeAsync(() =>
+                        {
+                            botMessage.Text += delta;
+                            StateHasChanged();
+                        });
+                    }
+                    : null,
+                OnNodeCompleted = async data =>
+                {
+                    var node = nodes.FirstOrDefault(n => n.InstanceId == data.NodeId);
+                    if (node is not null) node.Status = data.Status.ToString();
+                    runOutputs[data.NodeId] = new RunOutput(data.ItemCount,
+                        data.Output.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
+                    await InvokeAsync(StateHasChanged);
+                    await SyncGraphAsync();
+
+                    if (WorkflowId.HasValue)
+                    {
+                        await EventPublisher.PublishNodeCompletedAsync(WorkflowId.Value, Guid.Empty, data);
+                    }
+                }
+            };
+
             var result = await Engine.ExecuteAsync(BuildDefinition().RootElement, payload.RootElement,
-                new WorkflowExecutionOptions { WorkflowId = WorkflowId });
-            chatMessages.Add(new ChatMessage(false, ExtractReply(result)));
+                options);
+            if (!result.Succeeded || string.IsNullOrWhiteSpace(botMessage.Text))
+            {
+                botMessage.Text = ExtractReply(result);
+            }
         }
         catch (Exception ex)
         {
-            chatMessages.Add(new ChatMessage(false, $"Hata: {ex.Message}"));
+            botMessage.Text = $"Hata: {ex.Message}";
         }
         finally
         {
             chatBusy = false;
             StateHasChanged();
         }
+    }
+
+    private bool IsChatStreamEnabled()
+    {
+        var trigger = nodes.FirstOrDefault(n => n.NodeKey == "chat.trigger");
+        if (trigger is null)
+        {
+            return true;
+        }
+
+        return !trigger.Parameters.TryGetValue("chatStream", out var value) ||
+            !bool.TryParse(value, out var enabled) ||
+            enabled;
     }
 
     private static string ExtractReply(WorkflowRunResult result)
@@ -881,7 +961,11 @@ public partial class WorkflowDesigner : IAsyncDisposable
 
     private sealed record RunOutput(int ItemCount, string Json);
 
-    private sealed record ChatMessage(bool IsUser, string Text);
+    private sealed class ChatMessage(bool isUser, string text)
+    {
+        public bool IsUser { get; } = isUser;
+        public string Text { get; set; } = text;
+    }
 
     private sealed class CredField
     {

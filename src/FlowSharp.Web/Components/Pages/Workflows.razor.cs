@@ -1,4 +1,6 @@
 using Microsoft.AspNetCore.Components;
+using Microsoft.AspNetCore.Components.Authorization;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
 using System;
 using System.Collections.Generic;
@@ -6,6 +8,7 @@ using System.Linq;
 using System.Text.Json;
 using System.Threading.Tasks;
 using FlowSharp.Application.Abstractions;
+using FlowSharp.Domain.Security;
 using FlowSharp.Domain.Workflows;
 using FlowSharp.Infrastructure.Data;
 
@@ -17,11 +20,19 @@ public partial class Workflows
     [Inject] public IWorkflowQueue Queue { get; set; } = default!;
     [Inject] public IWebhookRegistrar WebhookRegistrar { get; set; } = default!;
     [Inject] public NavigationManager Navigation { get; set; } = default!;
+    [Inject] public IAuthorizationService AuthorizationService { get; set; } = default!;
+    [Inject] public AuthenticationStateProvider AuthenticationStateProvider { get; set; } = default!;
 
     private List<Workflow>? workflows;
     private string? message;
+    private bool canWrite;
+    private bool canExecute;
 
-    protected override async Task OnInitializedAsync() => await ReloadAsync();
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadPermissionsAsync();
+        await ReloadAsync();
+    }
 
     private async Task ReloadAsync()
     {
@@ -33,16 +44,35 @@ public partial class Workflows
 
     private async Task RunAsync(Guid id)
     {
+        if (!canExecute)
+        {
+            await Flash("Workflow calistirma yetkiniz yok.");
+            return;
+        }
+
         await Queue.EnqueueAsync(id, JsonDocument.Parse("""{"source":"manual"}"""));
         await Flash("Workflow kuyruga alindi.");
     }
 
     private async Task DeleteAsync(Guid id)
     {
+        if (!canWrite)
+        {
+            await Flash("Workflow silme yetkiniz yok.");
+            return;
+        }
+
         await WebhookRegistrar.SyncAsync(id, JsonDocument.Parse("""{"nodes":[]}""").RootElement, false);
         await DbContext.Workflows.Where(w => w.Id == id).ExecuteDeleteAsync();
         await ReloadAsync();
         await Flash("Workflow silindi.");
+    }
+
+    private async Task LoadPermissionsAsync()
+    {
+        var user = (await AuthenticationStateProvider.GetAuthenticationStateAsync()).User;
+        canWrite = (await AuthorizationService.AuthorizeAsync(user, AppPermissions.WorkflowsWrite)).Succeeded;
+        canExecute = (await AuthorizationService.AuthorizeAsync(user, AppPermissions.WorkflowsExecute)).Succeeded;
     }
 
     private async Task Flash(string text)

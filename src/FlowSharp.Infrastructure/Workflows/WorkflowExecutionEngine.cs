@@ -135,9 +135,22 @@ public sealed class WorkflowExecutionEngine(
                 var agentStartedAt = DateTimeOffset.UtcNow;
                 var request = new AgentRequest(
                     node.Type, node.Name, node.Parameters, input,
-                    subs.Select(s => new AgentSubNode(s.Sub.Type, s.Sub.Name, s.Sub.Parameters, s.Type)).ToList(),
+                    subs.Select(s => new AgentSubNode(s.Sub.Id, s.Sub.Type, s.Sub.Name, s.Sub.Parameters, s.Type)).ToList(),
                     (t, n, p, items) => new NodeExecutionContext(
-                        t, n, p, items, outputsByName, trigger, 0, evaluator, services, _ => { }, cancellationToken, options.WorkflowId));
+                        t, n, p, items, outputsByName, trigger, 0, evaluator, services, _ => { }, cancellationToken, options.WorkflowId),
+                    async data =>
+                    {
+                        if (recordLog)
+                        {
+                            runLog.Add(data);
+                        }
+
+                        if (options.OnNodeCompleted is not null)
+                        {
+                            await options.OnNodeCompleted(data);
+                        }
+                    },
+                    options.OnTextDelta);
 
                 var agentResult = await agentExecutor.ExecuteAsync(request, cancellationToken);
                 run = agentResult.Succeeded

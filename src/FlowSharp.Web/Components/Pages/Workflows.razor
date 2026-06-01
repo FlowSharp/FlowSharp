@@ -18,9 +18,12 @@
                 <MudText Typo="Typo.h4" Class="Fsharp-title">@L["nav.workflows"]</MudText>
                 <MudText Typo="Typo.body1" Color="Color.Secondary">@L["workflows.summary"]</MudText>
             </div>
-            <MudButton Href="workflows/designer" Color="Color.Primary" Variant="Variant.Filled" StartIcon="@Icons.Material.Filled.Add">
-                @L["home.new_workflow"]
-            </MudButton>
+            @if (canWrite)
+            {
+                <MudButton Href="workflows/designer" Color="Color.Primary" Variant="Variant.Filled" StartIcon="@Icons.Material.Filled.Add">
+                    @L["home.new_workflow"]
+                </MudButton>
+            }
         </MudStack>
 
         @if (workflows is null)
@@ -33,9 +36,12 @@
                 <MudIcon Icon="@Icons.Material.Filled.AccountTree" Size="Size.Large" Color="Color.Secondary" />
                 <MudText Typo="Typo.h6">@L["workflows.empty.title"]</MudText>
                 <MudText Color="Color.Secondary">@L["workflows.empty.summary"]</MudText>
-                <MudButton Href="workflows/designer" Color="Color.Primary" Variant="Variant.Filled" StartIcon="@Icons.Material.Filled.Add">
-                    @L["workflows.empty.open_designer"]
-                </MudButton>
+                @if (canWrite)
+                {
+                    <MudButton Href="workflows/designer" Color="Color.Primary" Variant="Variant.Filled" StartIcon="@Icons.Material.Filled.Add">
+                        @L["workflows.empty.open_designer"]
+                    </MudButton>
+                }
             </MudPaper>
         }
         else
@@ -58,10 +64,19 @@
                                 </MudStack>
                             </MudCardContent>
                             <MudCardActions>
-                                <MudButton Href="@($"workflows/designer/{wf.Id}")" Variant="Variant.Text" StartIcon="@Icons.Material.Filled.Edit">@L["common.edit"]</MudButton>
-                                <MudButton Variant="Variant.Text" Color="Color.Success" StartIcon="@Icons.Material.Filled.PlayArrow" OnClick="() => RunAsync(wf.Id)">@L["common.run"]</MudButton>
+                                @if (canWrite)
+                                {
+                                    <MudButton Href="@($"workflows/designer/{wf.Id}")" Variant="Variant.Text" StartIcon="@Icons.Material.Filled.Edit">@L["common.edit"]</MudButton>
+                                }
+                                @if (canExecute)
+                                {
+                                    <MudButton Variant="Variant.Text" Color="Color.Success" StartIcon="@Icons.Material.Filled.PlayArrow" OnClick="() => RunAsync(wf.Id)">@L["common.run"]</MudButton>
+                                }
                                 <MudSpacer />
-                                <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Error" OnClick="() => DeleteAsync(wf.Id)" />
+                                @if (canWrite)
+                                {
+                                    <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Error" OnClick="() => DeleteAsync(wf.Id)" />
+                                }
                             </MudCardActions>
                         </MudCard>
                     </MudItem>

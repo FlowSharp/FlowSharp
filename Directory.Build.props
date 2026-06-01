@@ -1,0 +1,12 @@
+<Project>
+  <PropertyGroup Condition="'$(RuntimeIdentifier)' == '' and '$(FLOW_SHARP_RUNTIME_IDENTIFIER)' != '' and ('$(MSBuildProjectName)' == 'FlowSharp.Web' or '$(MSBuildProjectName)' == 'FlowSharp.Worker')">
+    <RuntimeIdentifier>$(FLOW_SHARP_RUNTIME_IDENTIFIER)</RuntimeIdentifier>
+    <AppendRuntimeIdentifierToOutputPath>false</AppendRuntimeIdentifierToOutputPath>
+  </PropertyGroup>
+
+  <!-- Keep local Windows builds from copying every native runtime asset shipped by ONNX/SQLite packages. -->
+  <PropertyGroup Condition="'$(RuntimeIdentifier)' == '' and '$(OS)' == 'Windows_NT' and ('$(MSBuildProjectName)' == 'FlowSharp.Web' or '$(MSBuildProjectName)' == 'FlowSharp.Worker')">
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <AppendRuntimeIdentifierToOutputPath>false</AppendRuntimeIdentifierToOutputPath>
+  </PropertyGroup>
+</Project>

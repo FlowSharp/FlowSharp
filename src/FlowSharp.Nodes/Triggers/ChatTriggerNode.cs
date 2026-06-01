@@ -17,7 +17,15 @@ namespace FlowSharp.Nodes.Triggers
             Category: NodeCategory.Trigger,
             Kind: NodeKind.Trigger,
             Description: "Sohbet penceresinden mesaj geldiginde workflow'u baslatir.",
-            Parameters: [],
+            Parameters:
+            [
+                new NodeParameterDefinition(
+                    "chatStream",
+                    "ChatStream",
+                    NodeParameterType.Boolean,
+                    DefaultValue: "true",
+                    HelpText: "AI cevabini destekleyen modellerde parca parca sohbet penceresine aktarir.")
+            ],
             Tags: ["trigger", "ai"],
             Icon: "message-circle",
             Color: "#10a37f",

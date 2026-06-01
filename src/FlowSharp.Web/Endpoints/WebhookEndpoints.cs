@@ -20,10 +20,12 @@ public static class WebhookEndpoints
         HttpContext httpContext,
         IWebhookRegistrar registrar,
         IWorkflowRunner runner,
+        ILoggerFactory loggerFactory,
         CancellationToken cancellationToken)
     {
         var request = httpContext.Request;
         var response = httpContext.Response;
+        var logger = loggerFactory.CreateLogger("WebhookEndpoints");
 
         var match = await registrar.ResolveAsync(request.Method, path, cancellationToken);
         if (match is null)
@@ -43,8 +45,10 @@ public static class WebhookEndpoints
         }
         catch (Exception exception)
         {
+            logger.LogError(exception, "Webhook calismasi sirasinda hata olustu. Method: {Method}, Path: {Path}, WorkflowId: {WorkflowId}",
+                request.Method, path, match.WorkflowId);
             await WriteJsonAsync(response, StatusCodes.Status500InternalServerError,
-                new JsonObject { ["error"] = exception.Message }, cancellationToken);
+                new JsonObject { ["error"] = "Webhook calismasi basarisiz." }, cancellationToken);
             return;
         }
 
@@ -69,8 +73,10 @@ public static class WebhookEndpoints
         }
         else
         {
+            logger.LogWarning("Webhook calismasi basarisiz. Method: {Method}, Path: {Path}, WorkflowId: {WorkflowId}, Error: {Error}",
+                request.Method, path, match.WorkflowId, result.Error);
             await WriteJsonAsync(response, StatusCodes.Status500InternalServerError,
-                new JsonObject { ["error"] = result.Error ?? "Workflow calismasi basarisiz." }, cancellationToken);
+                new JsonObject { ["error"] = "Webhook calismasi basarisiz." }, cancellationToken);
         }
     }
 

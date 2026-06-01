@@ -11,6 +11,7 @@ EXPOSE 8081
 # SDK image for restoring and building
 FROM mcr.microsoft.com/dotnet/sdk:10.0-alpine AS build
 ARG BUILD_CONFIGURATION=Release
+ARG RUNTIME_IDENTIFIER=linux-musl-x64
 WORKDIR /src
 
 # Copy csproj files for restoring
@@ -22,29 +23,31 @@ COPY ["src/FlowSharp.Infrastructure/FlowSharp.Infrastructure.csproj", "src/FlowS
 COPY ["src/FlowSharp.Nodes/FlowSharp.Nodes.csproj", "src/FlowSharp.Nodes/"]
 
 # Restore dependencies
-RUN dotnet restore "src/FlowSharp.Web/FlowSharp.Web.csproj"
-RUN dotnet restore "src/FlowSharp.Worker/FlowSharp.Worker.csproj"
+RUN dotnet restore "src/FlowSharp.Web/FlowSharp.Web.csproj" -r $RUNTIME_IDENTIFIER
+RUN dotnet restore "src/FlowSharp.Worker/FlowSharp.Worker.csproj" -r $RUNTIME_IDENTIFIER
 
 # Copy all source files
 COPY . .
 
 # Build Web
 WORKDIR "/src/src/FlowSharp.Web"
-RUN dotnet build "FlowSharp.Web.csproj" -c $BUILD_CONFIGURATION -o /app/build
+RUN dotnet build "FlowSharp.Web.csproj" -c $BUILD_CONFIGURATION -r $RUNTIME_IDENTIFIER --self-contained false -o /app/build
 
 # Build Worker
 WORKDIR "/src/src/FlowSharp.Worker"
-RUN dotnet build "FlowSharp.Worker.csproj" -c $BUILD_CONFIGURATION -o /app/build
+RUN dotnet build "FlowSharp.Worker.csproj" -c $BUILD_CONFIGURATION -r $RUNTIME_IDENTIFIER --self-contained false -o /app/build
 
 # Publish Web stage
 FROM build AS publish-web
+ARG RUNTIME_IDENTIFIER=linux-musl-x64
 WORKDIR "/src/src/FlowSharp.Web"
-RUN dotnet publish "FlowSharp.Web.csproj" -c $BUILD_CONFIGURATION -o /app/publish/web /p:UseAppHost=false
+RUN dotnet publish "FlowSharp.Web.csproj" -c $BUILD_CONFIGURATION -r $RUNTIME_IDENTIFIER --self-contained false -o /app/publish/web /p:UseAppHost=false
 
 # Publish Worker stage
 FROM build AS publish-worker
+ARG RUNTIME_IDENTIFIER=linux-musl-x64
 WORKDIR "/src/src/FlowSharp.Worker"
-RUN dotnet publish "FlowSharp.Worker.csproj" -c $BUILD_CONFIGURATION -o /app/publish/worker /p:UseAppHost=false
+RUN dotnet publish "FlowSharp.Worker.csproj" -c $BUILD_CONFIGURATION -r $RUNTIME_IDENTIFIER --self-contained false -o /app/publish/worker /p:UseAppHost=false
 
 # Final Web target image
 FROM base AS web

@@ -24,6 +24,9 @@ public sealed class WorkflowExecutionOptions
     /// <summary>Her node tamamlandiginda cagrilir (SignalR canli durum icin).</summary>
     public Func<NodeRunData, Task>? OnNodeCompleted { get; init; }
 
+    /// <summary>AI modelinden gelen metin parcalarini canli chat UI'ina aktarmak icin kullanilir.</summary>
+    public Func<string, Task>? OnTextDelta { get; init; }
+
     /// <summary>Calisan workflow'un kimligi (RAG gibi workspace'e ozel kaynaklari izole etmek icin).</summary>
     public Guid? WorkflowId { get; init; }
 }

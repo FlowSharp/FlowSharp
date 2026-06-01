@@ -514,7 +514,7 @@
             {
                 <div class="nwf-chat-msg @(msg.IsUser ? "user" : "bot")">@msg.Text</div>
             }
-            @if (chatBusy)
+            @if (ShowTyping)
             {
                 <div class="nwf-chat-msg bot typing">
                     <span class="dot"></span>

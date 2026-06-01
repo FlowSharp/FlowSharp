@@ -1,7 +1,6 @@
 using System.Security.Cryptography;
 using System.Text;
 using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.Logging;
 
 namespace FlowSharp.Infrastructure.Security;
 
@@ -15,28 +14,25 @@ public interface ICredentialProtector
 
 /// <summary>
 /// AES-GCM tabanli sifreleme. Anahtar yapilandirmadan okunur:
-/// <c>Security:CredentialEncryptionKey</c> (base64, 32 bayt). Ayarlanmazsa
-/// geliştirme icin sabit bir anahtar turetilir (production'da uyari verir).
+/// <c>Security:CredentialEncryptionKey</c> (base64, 32 bayt). Anahtar zorunludur;
+/// Web ve Worker ayni anahtari kullanmalidir.
 /// </summary>
 public sealed class CredentialProtector : ICredentialProtector
 {
     private readonly byte[] key;
 
-    public CredentialProtector(IConfiguration configuration, ILogger<CredentialProtector> logger)
+    public CredentialProtector(IConfiguration configuration)
     {
         var configured = configuration["Security:CredentialEncryptionKey"];
-        if (!string.IsNullOrWhiteSpace(configured))
+        if (string.IsNullOrWhiteSpace(configured))
         {
-            key = Convert.FromBase64String(configured);
-            if (key.Length != 32)
-            {
-                throw new InvalidOperationException("Security:CredentialEncryptionKey base64 cozumlendiginde 32 bayt olmali.");
-            }
+            throw new InvalidOperationException("Security:CredentialEncryptionKey ayari zorunludur ve base64 formatinda 32 baytlik bir anahtar olmalidir.");
         }
-        else
+
+        key = Convert.FromBase64String(configured);
+        if (key.Length != 32)
         {
-            logger.LogWarning("Security:CredentialEncryptionKey ayarlanmamis; gelistirme icin turetilmis sabit anahtar kullaniliyor. Production'da mutlaka ayarlayin.");
-            key = SHA256.HashData(Encoding.UTF8.GetBytes("FlowSharp-dev-credential-key"));
+            throw new InvalidOperationException("Security:CredentialEncryptionKey base64 cozumlendiginde 32 bayt olmali.");
         }
     }
 

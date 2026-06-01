@@ -24,7 +24,10 @@ public static class DependencyInjection
             ?? throw new InvalidOperationException("Connection string 'DefaultConnection' not found.");
 
         services.AddDbContext<ApplicationDbContext>(options => options.UseNpgsql(connectionString));
-        services.AddHttpClient("workflow-nodes");
+        services.Configure<HttpNodeNetworkOptions>(configuration.GetSection(HttpNodeNetworkOptions.SectionName));
+        services.AddTransient<PrivateNetworkBlockingHandler>();
+        services.AddHttpClient("workflow-nodes")
+            .AddHttpMessageHandler<PrivateNetworkBlockingHandler>();
 
         // Kuyruk ve calistirma
         services.AddScoped<IWorkflowQueue, PostgresWorkflowQueue>();

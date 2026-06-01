@@ -1,10 +1,11 @@
 using System.Text.Json.Nodes;
 using FlowSharp.Domain.Nodes;
+using FlowSharp.Application.Workflows;
 
 namespace FlowSharp.Application.Nodes.Agents;
 
 /// <summary>Bir AI agent'a bagli alt-node (Model / Tool / Memory).</summary>
-public sealed record AgentSubNode(string Type, string Name, JsonObject Parameters, NodePortType PortType);
+public sealed record AgentSubNode(string Id, string Type, string Name, JsonObject Parameters, NodePortType PortType);
 
 /// <summary>
 /// Verilen node icin bir yurutme baglami uretir. Motor bunu saglar; boylece agent executor
@@ -20,7 +21,9 @@ public sealed record AgentRequest(
     JsonObject AgentParameters,
     IReadOnlyList<NodeItem> Input,
     IReadOnlyList<AgentSubNode> Subs,
-    AgentContextFactory ContextFactory);
+    AgentContextFactory ContextFactory,
+    Func<NodeRunData, Task>? OnSubNodeCompleted = null,
+    Func<string, Task>? OnTextDelta = null);
 
 /// <summary>AI agent calistirma sonucu.</summary>
 public sealed record AgentResult(bool Succeeded, NodeItem Item, string? Error)
