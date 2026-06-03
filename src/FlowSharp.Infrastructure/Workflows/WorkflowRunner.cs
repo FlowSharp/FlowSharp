@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using FlowSharp.Application.Abstractions;
+using FlowSharp.Application.Errors;
 using FlowSharp.Application.Workflows;
 using FlowSharp.Domain.Queue;
 using FlowSharp.Domain.Workflows;
@@ -112,12 +113,13 @@ public sealed class WorkflowRunner(
         }
         catch (Exception exception)
         {
+            var message = exception.ToUserMessage();
             execution.Status = WorkflowExecutionStatus.Failed;
-            execution.Error = exception.Message;
+            execution.Error = message;
             execution.FinishedAt = DateTimeOffset.UtcNow;
             await dbContext.SaveChangesAsync(cancellationToken);
 
-            await TriggerErrorWorkflowsAsync(workflow.Id, execution.Id, exception.Message, payload, cancellationToken);
+            await TriggerErrorWorkflowsAsync(workflow.Id, execution.Id, message, payload, cancellationToken);
             throw;
         }
     }

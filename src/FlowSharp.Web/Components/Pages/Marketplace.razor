@@ -172,7 +172,7 @@
                 Set(L["marketplace.browse.empty"], true);
             }
         }
-        catch (Exception ex) { Set(ex.Message, true); }
+        catch (Exception ex) { Set(ex.ToUserMessage(), true); }
         finally { busy = false; }
     }
 
@@ -188,7 +188,7 @@
             // Kurulan eklentiyi "kuruldu" olarak isaretle.
             available = available.Select(p => p.Path == pluginPath ? p with { Installed = true } : p).ToList();
         }
-        catch (Exception ex) { Set(ex.Message, true); }
+        catch (Exception ex) { Set(ex.ToUserMessage(), true); }
         finally { busy = false; Refresh(); }
     }
 
@@ -200,7 +200,7 @@
             var info = await Plugins.ReloadAsync(name);
             Set(info.Loaded ? $"'{name}' yeniden yuklendi." : $"'{name}' hata: {info.Error}", !info.Loaded);
         }
-        catch (Exception ex) { Set(ex.Message, true); }
+        catch (Exception ex) { Set(ex.ToUserMessage(), true); }
         finally { busy = false; Refresh(); }
     }
 
@@ -212,7 +212,7 @@
             await Plugins.RemoveAsync(name);
             Set($"'{name}' kaldirildi.", false);
         }
-        catch (Exception ex) { Set(ex.Message, true); }
+        catch (Exception ex) { Set(ex.ToUserMessage(), true); }
         finally { busy = false; Refresh(); }
     }
 

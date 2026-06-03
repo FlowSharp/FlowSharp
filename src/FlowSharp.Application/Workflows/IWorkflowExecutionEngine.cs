@@ -35,6 +35,12 @@ public sealed class WorkflowExecutionOptions
     /// <summary>Yalniz bu node ornek adindan baslat (manuel tek-node testi); null ise tum tetikleyiciler.</summary>
     public string? StartNodeName { get; init; }
 
+    /// <summary>
+    /// true ise bagli trigger bulunmadiginda girisi olmayan kaynak node'lardan baslatmaya izin verir.
+    /// Yalniz designer dropdown upstream hesaplamasi gibi ic/yardimci calistirmalarda kullanilmali.
+    /// </summary>
+    public bool AllowSourceNodesWithoutTrigger { get; init; }
+
     /// <summary>Her node tamamlandiginda cagrilir (SignalR canli durum icin).</summary>
     public Func<NodeRunData, Task>? OnNodeCompleted { get; init; }
 

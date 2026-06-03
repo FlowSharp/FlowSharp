@@ -97,18 +97,18 @@
                 <MudTd Style="text-align:right">
                     @if (canWrite)
                     {
-                        <MudIconButton Href="@($"workflows/designer/{context.Id}")" Icon="@Icons.Material.Filled.Edit" Title="@L["common.edit"]" Size="Size.Small" />
+                        <MudIconButton Href="@($"workflows/designer/{context.Id}")" Icon="@Icons.Material.Filled.Edit" title="@L["common.edit"]" Size="Size.Small" />
                     }
                     @if (canExecute)
                     {
                         <MudIconButton Color="Color.Success"
                                        Icon="@Icons.Material.Filled.PlayArrow"
-                                       Title="@L["common.run"]" Size="Size.Small"
+                                       title="@L["common.run"]" Size="Size.Small"
                                        Disabled="@(runningId == context.Id)" OnClick="() => RunAsync(context.Id)" />
                     }
                     @if (canWrite)
                     {
-                        <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Error" Title="@L["common.delete"]" Size="Size.Small" OnClick="() => DeleteAsync(context.Id)" />
+                        <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Error" title="@L["common.delete"]" Size="Size.Small" OnClick="() => DeleteAsync(context.Id)" />
                     }
                 </MudTd>
             </RowTemplate>

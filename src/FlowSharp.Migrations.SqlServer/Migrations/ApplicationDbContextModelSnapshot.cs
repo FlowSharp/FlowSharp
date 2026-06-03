@@ -76,6 +76,10 @@ namespace FlowSharp.Migrations.SqlServer.Migrations
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("datetimeoffset");
 
+                    b.Property<string>("DedupeKey")
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
+
                     b.Property<Guid?>("ExecutionId")
                         .HasColumnType("uniqueidentifier");
 
@@ -107,6 +111,10 @@ namespace FlowSharp.Migrations.SqlServer.Migrations
                         .HasColumnType("uniqueidentifier");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("DedupeKey")
+                        .IsUnique()
+                        .HasFilter("[DedupeKey] IS NOT NULL");
 
                     b.HasIndex("LockedUntil");
 
@@ -148,11 +156,15 @@ namespace FlowSharp.Migrations.SqlServer.Migrations
                     b.Property<Guid>("WorkflowId")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<string>("WorkflowKey")
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
                     b.HasKey("Id");
 
                     b.HasIndex("WorkflowId");
 
-                    b.HasIndex("Method", "Path");
+                    b.HasIndex("WorkflowKey", "Method", "Path");
 
                     b.ToTable("webhook_registrations", (string)null);
                 });

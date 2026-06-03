@@ -1,6 +1,7 @@
 using System.Data;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 using FlowSharp.Application.Abstractions;
 using FlowSharp.Domain.Queue;
 using FlowSharp.Infrastructure.Data;
@@ -27,19 +28,78 @@ public abstract class EfWorkflowQueue(ApplicationDbContext dbContext) : IWorkflo
         return job;
     }
 
+    public async Task<bool> TryEnqueueOnceAsync(Guid workflowId, JsonDocument payload, string dedupeKey, CancellationToken cancellationToken = default)
+    {
+        // Hizli yol: anahtar zaten varsa hic eklemeye calisma (yaygin durum).
+        if (await DbContext.WorkflowJobs.AnyAsync(job => job.DedupeKey == dedupeKey, cancellationToken))
+        {
+            return false;
+        }
+
+        var job = new WorkflowJob
+        {
+            WorkflowId = workflowId,
+            Payload = payload,
+            DedupeKey = dedupeKey
+        };
+
+        DbContext.WorkflowJobs.Add(job);
+        try
+        {
+            await DbContext.SaveChangesAsync(cancellationToken);
+            return true;
+        }
+        catch (DbUpdateException)
+        {
+            // Yukaridaki kontrol ile insert arasinda baska bir ornek ayni anahtarla ekledi
+            // (unique index ihlali). Cift tetikleme onlendi; eklenmemis say.
+            DbContext.Entry(job).State = EntityState.Detached;
+            return false;
+        }
+    }
+
     public virtual async Task<WorkflowJob?> DequeueAsync(string workerId, TimeSpan lockDuration, CancellationToken cancellationToken = default)
     {
         await using var transaction = await DbContext.Database.BeginTransactionAsync(DequeueIsolationLevel, cancellationToken);
         var now = DateTimeOffset.UtcNow;
 
+        // Aday isler: (1) bekleyen ve vakti gelmis isler, (2) "Processing" gorunup kilidi suresi
+        // dolmus isler (worker tamamlamadan sonlanmis = terk edilmis). Ikincisi olmadan, cokmus
+        // bir worker'in isi sonsuza dek "Processing" kalir ve asla yeniden denenmezdi.
         var job = await DbContext.WorkflowJobs
-            .Where(job => job.Status == WorkflowJobStatus.Pending)
-            .Where(job => job.AvailableAt <= now)
+            .Where(job => (job.Status == WorkflowJobStatus.Pending && job.AvailableAt <= now)
+                       || (job.Status == WorkflowJobStatus.Processing && job.LockedUntil != null && job.LockedUntil < now))
             .OrderBy(job => job.CreatedAt)
             .FirstOrDefaultAsync(cancellationToken);
 
         if (job is null)
         {
+            await transaction.CommitAsync(cancellationToken);
+            return null;
+        }
+
+        return await ClaimAsync(job, workerId, lockDuration, now, transaction, cancellationToken);
+    }
+
+    /// <summary>
+    /// Secilen isi bu worker adina kilitler. Terk edilmis (yeniden alinan) ve deneme hakki
+    /// tukenmis isi calistirmak yerine olu mektuba (DeadLetter) tasir; boylece worker'i tekrar
+    /// tekrar cokerten "zehirli" bir is sonsuza dek geri alinmaz.
+    /// </summary>
+    protected async Task<WorkflowJob?> ClaimAsync(
+        WorkflowJob job, string workerId, TimeSpan lockDuration, DateTimeOffset now,
+        IDbContextTransaction transaction, CancellationToken cancellationToken)
+    {
+        var reclaimed = job.Status == WorkflowJobStatus.Processing;
+        if (reclaimed && job.AttemptCount >= job.MaxAttempts)
+        {
+            job.Status = WorkflowJobStatus.DeadLetter;
+            job.LockedBy = null;
+            job.LockedUntil = null;
+            job.LastError ??= "Worker isi tamamlamadan sonlandi; azami deneme sayisi asildi.";
+            job.UpdatedAt = now;
+
+            await DbContext.SaveChangesAsync(cancellationToken);
             await transaction.CommitAsync(cancellationToken);
             return null;
         }

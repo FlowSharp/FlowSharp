@@ -20,6 +20,52 @@ function applyTransform(state) {
     state.world.style.transform = `translate(${state.tx}px, ${state.ty}px) scale(${state.scale})`;
 }
 
+function styleEdge(path, conn) {
+    path.style.fill = "none";
+    path.style.stroke = conn.ai ? "#a78bfa" : conn.active ? "#56d8ff" : "rgba(148,163,184,.78)";
+    path.style.strokeWidth = conn.active ? "3.5px" : "2.5px";
+    path.style.strokeLinecap = "round";
+    path.style.strokeLinejoin = "round";
+    path.style.pointerEvents = "stroke";
+    path.style.cursor = "pointer";
+    path.style.filter = conn.active ? "drop-shadow(0 0 10px rgba(86,216,255,.45))" : "";
+    if (conn.ai || conn.active) {
+        path.style.strokeDasharray = conn.ai ? "7 6" : "10 7";
+    }
+}
+
+function styleTempEdge(path) {
+    path.style.fill = "none";
+    path.style.stroke = "#ff6b5f";
+    path.style.strokeWidth = "3";
+    path.style.strokeLinecap = "round";
+    path.style.strokeDasharray = "7 5";
+    path.style.filter = "drop-shadow(0 0 10px rgba(255,107,95,.45))";
+}
+
+function setPortState(el, stateName) {
+    if (stateName === "compatible") {
+        el.style.opacity = "1";
+        el.style.borderColor = "#34d399";
+        el.style.background = "#34d399";
+        el.style.boxShadow = "0 0 0 6px rgba(52,211,153,.22)";
+        return;
+    }
+    if (stateName === "incompatible") {
+        el.style.opacity = ".32";
+        el.style.pointerEvents = "none";
+        return;
+    }
+    el.style.opacity = "";
+    el.style.pointerEvents = "";
+    const ai = el.dataset.portType === "sub";
+    const out = el.classList.contains("out");
+    const color = ai ? "#a78bfa" : out ? "#56d8ff" : "#ff6b5f";
+    el.style.borderColor = color;
+    el.style.background = "#101827";
+    el.style.boxShadow = `0 0 0 3px ${ai ? "rgba(167,139,250,.14)" : "rgba(86,216,255,.12)"}`;
+}
+
 function alignVisible(state, force = false) {
     if (!force && state.didInitialAlign) return;
     if (state.nodes.size === 0) return;
@@ -74,6 +120,7 @@ function redrawEdges(state) {
         const path = document.createElementNS(NS, "path");
         path.setAttribute("class", "edge" + (conn.active ? " active" : "") + (conn.ai ? " ai" : ""));
         path.setAttribute("d", bezier(from, to));
+        styleEdge(path, conn);
         path.addEventListener("pointerdown", (e) => {
             e.stopPropagation();
             if (state.readOnly) return;
@@ -105,6 +152,14 @@ function onPointerDown(state, e) {
         return;
     }
 
+    // Middle mouse button click (button === 1) pans from anywhere (even over nodes)
+    if (e.button === 1) {
+        state.panning = { startX: e.clientX, startY: e.clientY, tx: state.tx, ty: state.ty, moved: false };
+        state.canvas.classList.add("panning");
+        e.preventDefault();
+        return;
+    }
+
     // Shift + drag on empty space triggers selection area
     const canvasClick = !e.target.closest(".nwf-node") && !e.target.closest(".nwf-port") && !e.target.closest(".nwf-controls") && !e.target.closest(".nwf-add-fab") && !e.target.closest(".nwf-chat-fab") && !e.target.closest(".nwf-chat");
     if (canvasClick && e.shiftKey) {
@@ -118,6 +173,12 @@ function onPointerDown(state, e) {
         };
         state.selectionBox = document.createElement("div");
         state.selectionBox.className = "nwf-selection-box";
+        state.selectionBox.style.position = "absolute";
+        state.selectionBox.style.zIndex = "1000";
+        state.selectionBox.style.border = "1.5px dashed #56d8ff";
+        state.selectionBox.style.borderRadius = "6px";
+        state.selectionBox.style.background = "rgba(86,216,255,.1)";
+        state.selectionBox.style.pointerEvents = "none";
         state.world.appendChild(state.selectionBox);
         e.preventDefault();
         return;
@@ -145,7 +206,21 @@ function onPointerDown(state, e) {
         state.connecting = { fromId: nodeId, fromPort: port };
         state.tempPath = document.createElementNS(NS, "path");
         state.tempPath.setAttribute("class", "temp");
+        styleTempEdge(state.tempPath);
         state.edges.appendChild(state.tempPath);
+
+        // Port uyumluluk vurgulari (ayni tipteki in portlari yesil, uyumsuzlar soluk)
+        const pType = portEl.dataset.portType;
+        state.canvas.querySelectorAll(".nwf-port.in").forEach(inEl => {
+            if (inEl.dataset.portType === pType) {
+                inEl.classList.add("nwf-port-compatible");
+                setPortState(inEl, "compatible");
+            } else {
+                inEl.classList.add("nwf-port-incompatible");
+                setPortState(inEl, "incompatible");
+            }
+        });
+
         e.preventDefault();
         return;
     }
@@ -176,7 +251,7 @@ function onPointerMove(state, e) {
         const y = Math.min(s.y1, pt.y);
         const w = Math.abs(s.x1 - pt.x);
         const h = Math.abs(s.y1 - pt.y);
-        
+
         if (state.selectionBox) {
             state.selectionBox.style.left = x + "px";
             state.selectionBox.style.top = y + "px";
@@ -193,7 +268,7 @@ function onPointerMove(state, e) {
         const dy = (e.clientY - r.startY) / state.scale;
         r.currentWidth = Math.max(150, Math.round((r.startWidth + dx) / 10) * 10);
         r.currentHeight = Math.max(80, Math.round((r.startHeight + dy) / 10) * 10);
-        
+
         const el = document.getElementById(`node-${r.id}`);
         if (el) {
             el.style.width = r.currentWidth + "px";
@@ -254,6 +329,12 @@ function onPointerUp(state, e) {
     }
 
     if (state.connecting) {
+        // Port uyumluluk vurgularini temizle
+        state.canvas.querySelectorAll(".nwf-port.in").forEach(inEl => {
+            inEl.classList.remove("nwf-port-compatible", "nwf-port-incompatible");
+            setPortState(inEl, null);
+        });
+
         const portEl = e.target.closest(".nwf-port.in");
         if (portEl) {
             const toId = portEl.dataset.node;
@@ -313,7 +394,19 @@ export function init(canvasId, dotnet, readOnly = false) {
     const canvas = document.getElementById(canvasId);
     if (!canvas) return;
     const world = canvas.querySelector(".nwf-world");
-    const edges = canvas.querySelector(".nwf-edges");
+    let edges = canvas.querySelector(".nwf-edges");
+    if (!edges && world) {
+        edges = document.createElementNS(NS, "svg");
+        edges.setAttribute("class", "nwf-edges");
+        edges.style.position = "absolute";
+        edges.style.top = "0";
+        edges.style.left = "0";
+        edges.style.overflow = "visible";
+        edges.style.pointerEvents = "none";
+        edges.style.zIndex = "2";
+        world.prepend(edges);
+    }
+    if (!world || !edges) return;
 
     const state = {
         canvas, world, edges, dotnet, readOnly,
@@ -328,7 +421,12 @@ export function init(canvasId, dotnet, readOnly = false) {
         move: (e) => onPointerMove(state, e),
         up: (e) => onPointerUp(state, e),
         wheel: (e) => onWheel(state, e),
-        dbl: (e) => onDoubleClick(state, e)
+        dbl: (e) => onDoubleClick(state, e),
+        keydown: (e) => {
+            if (e.key === "Delete" || e.key === "Backspace") {
+                state.dotnet.invokeMethodAsync("OnKeyDown", e.key);
+            }
+        }
     };
 
     canvas.addEventListener("pointerdown", state.handlers.down);
@@ -336,6 +434,7 @@ export function init(canvasId, dotnet, readOnly = false) {
     window.addEventListener("pointerup", state.handlers.up);
     canvas.addEventListener("wheel", state.handlers.wheel, { passive: false });
     canvas.addEventListener("dblclick", state.handlers.dbl);
+    canvas.addEventListener("keydown", state.handlers.keydown);
 
     applyTransform(state);
     instances.set(canvasId, state);
@@ -400,5 +499,6 @@ export function dispose(canvasId) {
     window.removeEventListener("pointerup", state.handlers.up);
     state.canvas.removeEventListener("wheel", state.handlers.wheel);
     state.canvas.removeEventListener("dblclick", state.handlers.dbl);
+    state.canvas.removeEventListener("keydown", state.handlers.keydown);
     instances.delete(canvasId);
 }

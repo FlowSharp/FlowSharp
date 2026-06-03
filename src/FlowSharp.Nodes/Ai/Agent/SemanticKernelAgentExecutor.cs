@@ -1,12 +1,12 @@
 using System.Text.Json.Nodes;
 using System.Text;
-using System.Net;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.SemanticKernel;
 using Microsoft.SemanticKernel.Connectors.OpenAI;
 using FlowSharp.Application.Ai;
 using FlowSharp.Application.Abstractions;
+using FlowSharp.Application.Errors;
 using FlowSharp.Application.Nodes;
 using FlowSharp.Application.Nodes.Agents;
 using FlowSharp.Application.Workflows;
@@ -110,48 +110,24 @@ public sealed class SemanticKernelAgentExecutor(
 
             return AgentResult.Ok(NodeItem.From(new JsonObject { ["output"] = output }));
         }
-        catch (OperationCanceledException)
+        // Yalniz gercek (kullanici/motor kaynakli) iptalde yukari firlat. HTTP timeout'lari da
+        // TaskCanceledException (OperationCanceledException) firlatir; bunlari iptal sanmayip
+        // merkezi ceviriciye birakarak kullaniciya anlamli bir mesaj veririz.
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
             throw;
-        }
-        catch (HttpOperationException exception)
-        {
-            logger.LogError(exception, "AI Agent '{Name}' model servisi hatasi.", request.AgentName);
-            if (selectedModel is not null)
-            {
-                await NotifySubNodeAsync(request, selectedModel, NodeRunStatus.Failed, new JsonObject(), FormatAiServiceError(exception), modelStartedAt, 0);
-            }
-            return AgentResult.Fail(FormatAiServiceError(exception));
         }
         catch (Exception exception)
         {
             logger.LogError(exception, "AI Agent '{Name}' hatasi.", request.AgentName);
+            // Tum hata tipleri (AI servis statu kodlari dahil) merkezi hata ceviriciden gecer.
+            var message = exception.ToUserMessage();
             if (selectedModel is not null)
             {
-                await NotifySubNodeAsync(request, selectedModel, NodeRunStatus.Failed, new JsonObject(), "Model cagrisi basarisiz oldu.", modelStartedAt, 0);
+                await NotifySubNodeAsync(request, selectedModel, NodeRunStatus.Failed, new JsonObject(), message, modelStartedAt, 0);
             }
-            return AgentResult.Fail("AI Agent calismasi sirasinda beklenmeyen bir hata olustu. Detaylar loglara yazildi.");
+            return AgentResult.Fail(message);
         }
-    }
-
-    private static string FormatAiServiceError(HttpOperationException exception)
-    {
-        var statusCode = exception.StatusCode;
-        return statusCode switch
-        {
-            HttpStatusCode.ServiceUnavailable =>
-                "Model servisi su anda kullanilamiyor (503). Biraz sonra tekrar deneyin veya model/endpoint ayarlarini kontrol edin.",
-            HttpStatusCode.TooManyRequests =>
-                "Model servisi hiz limitine takildi (429). Biraz sonra tekrar deneyin veya kota/limit ayarlarini kontrol edin.",
-            HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden =>
-                $"Model servisi kimlik dogrulamayi reddetti ({(int)statusCode.Value}). API anahtari ve credential ayarlarini kontrol edin.",
-            HttpStatusCode.NotFound =>
-                "Model servisi secilen modeli veya endpoint'i bulamadi (404). Model/deployment adini kontrol edin.",
-            { } code =>
-                $"Model servisi istegi basarisiz oldu ({(int)code}). Detaylar loglara yazildi.",
-            null =>
-                "Model servisi istegi basarisiz oldu. Detaylar loglara yazildi."
-        };
     }
 
     private static async Task<string> InvokePromptStreamingAsync(
@@ -214,7 +190,7 @@ public sealed class SemanticKernelAgentExecutor(
             catch (Exception exception)
             {
                 logger.LogWarning(exception, "AI Agent '{Name}' memory node '{Memory}' calistirilamadi.", request.AgentName, memory.Name);
-                await NotifySubNodeAsync(request, memory, NodeRunStatus.Failed, new JsonObject(), "Memory sorgusu calistirilamadi. Detaylar loglara yazildi.", startedAt, 0);
+                await NotifySubNodeAsync(request, memory, NodeRunStatus.Failed, new JsonObject(), $"Memory sorgusu calistirilamadi: {exception.ToUserMessage()}", startedAt, 0);
                 continue;
             }
 
@@ -295,7 +271,7 @@ public sealed class SemanticKernelAgentExecutor(
             catch (Exception exception)
             {
                 logger.LogWarning(exception, "AI Agent '{Name}' konusma hafizasi kaydedilemedi.", request.AgentName);
-                await NotifySubNodeAsync(request, memory, NodeRunStatus.Failed, new JsonObject(), "Konusma hafizasi kaydedilemedi. Detaylar loglara yazildi.", DateTimeOffset.UtcNow, 0);
+                await NotifySubNodeAsync(request, memory, NodeRunStatus.Failed, new JsonObject(), $"Konusma hafizasi kaydedilemedi: {exception.ToUserMessage()}", DateTimeOffset.UtcNow, 0);
             }
         }
     }

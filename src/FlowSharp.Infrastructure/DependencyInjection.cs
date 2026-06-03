@@ -24,6 +24,12 @@ public static class DependencyInjection
 {
     public static IServiceCollection AddInfrastructure(this IServiceCollection services, IConfiguration configuration)
     {
+        // Veritabani hatalarini merkezi hata ceviriciye tanit (kullanici dostu mesajlar).
+        FlowSharp.Application.Errors.ErrorTranslator.Default.AddRule(
+            FlowSharp.Application.Errors.ErrorRule.For<DbUpdateException>(
+                "Veritabani islemi basarisiz oldu. Kayit cakismasi veya baglanti sorunu olabilir.",
+                FlowSharp.Application.Errors.ErrorCategory.Data));
+
         var connectionString = configuration.GetConnectionString("DefaultConnection")
             ?? throw new InvalidOperationException("Connection string 'DefaultConnection' not found.");
 

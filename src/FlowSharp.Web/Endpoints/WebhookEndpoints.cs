@@ -2,6 +2,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using FlowSharp.Application.Abstractions;
+using FlowSharp.Application.Errors;
 using FlowSharp.Application.Workflows;
 
 namespace FlowSharp.Web.Endpoints;
@@ -11,27 +12,33 @@ public static class WebhookEndpoints
 {
     public static IEndpointRouteBuilder MapWebhookEndpoints(this IEndpointRouteBuilder app)
     {
-        app.Map("/webhook/{**path}", HandleAsync);
+        // Workflow'a gore izole sema: /webhook/{workflowKey}/{path}. workflowKey bu workflow'un
+        // degismez webhook kilit anahtaridir; ayni path'i kullanan workflow'lar cakismaz.
+        app.Map("/webhook/{workflowKey}/{**path}", HandleAsync);
         return app;
     }
 
     private static async Task HandleAsync(
-        string path,
+        string workflowKey,
+        string? path,
         HttpContext httpContext,
         IWebhookRegistrar registrar,
         IWorkflowRunner runner,
         ILoggerFactory loggerFactory,
         CancellationToken cancellationToken)
     {
+        // Catch-all {**path} bos olabilir (orn. /webhook/{key}); null gelirse bos string'e indir.
+        path ??= string.Empty;
+
         var request = httpContext.Request;
         var response = httpContext.Response;
         var logger = loggerFactory.CreateLogger("WebhookEndpoints");
 
-        var match = await registrar.ResolveAsync(request.Method, path, cancellationToken);
+        var match = await registrar.ResolveAsync(workflowKey, request.Method, path, cancellationToken);
         if (match is null)
         {
             await WriteJsonAsync(response, StatusCodes.Status404NotFound,
-                new JsonObject { ["error"] = $"'{request.Method} /webhook/{path}' icin kayitli webhook yok." }, cancellationToken);
+                new JsonObject { ["error"] = $"'{request.Method} /webhook/{workflowKey}/{path}' icin kayitli webhook yok." }, cancellationToken);
             return;
         }
 
@@ -48,7 +55,7 @@ public static class WebhookEndpoints
             logger.LogError(exception, "Webhook calismasi sirasinda hata olustu. Method: {Method}, Path: {Path}, WorkflowId: {WorkflowId}",
                 request.Method, path, match.WorkflowId);
             await WriteJsonAsync(response, StatusCodes.Status500InternalServerError,
-                new JsonObject { ["error"] = "Webhook calismasi basarisiz." }, cancellationToken);
+                new JsonObject { ["error"] = exception.ToUserMessage() }, cancellationToken);
             return;
         }
 
@@ -76,7 +83,7 @@ public static class WebhookEndpoints
             logger.LogWarning("Webhook calismasi basarisiz. Method: {Method}, Path: {Path}, WorkflowId: {WorkflowId}, Error: {Error}",
                 request.Method, path, match.WorkflowId, result.Error);
             await WriteJsonAsync(response, StatusCodes.Status500InternalServerError,
-                new JsonObject { ["error"] = "Webhook calismasi basarisiz." }, cancellationToken);
+                new JsonObject { ["error"] = string.IsNullOrWhiteSpace(result.Error) ? "Webhook calismasi basarisiz." : result.Error }, cancellationToken);
         }
     }
 

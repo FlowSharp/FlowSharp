@@ -196,4 +196,72 @@ public class DataNodeTests
         outputs[0].Should().BeEmpty();
         outputs[2].Should().HaveCount(1);
     }
+
+    [Fact]
+    public async Task Switch_routes_unmatched_items_to_fallback_output()
+    {
+        var node = new SwitchNode();
+        var ctx = Ctx(new JsonObject
+        {
+            ["value1"] = "{{ $json.type }}",
+            ["rules"] = new JsonArray(new JsonObject { ["value"] = "a", ["output"] = 0 })
+        },
+            new JsonObject { ["type"] = "zzz" });
+
+        var outputs = (await node.ExecuteAsync(ctx)).Outputs;
+        // 4 kural portu + 1 fallback; eslesmeyen item sessizce dusurulmez, fallback'e gider.
+        outputs.Should().HaveCount(5);
+        outputs[0].Should().BeEmpty();
+        outputs[4].Should().HaveCount(1);
+    }
+
+    [Fact]
+    public async Task Switch_fails_on_matched_rule_with_invalid_output()
+    {
+        var node = new SwitchNode();
+        var ctx = Ctx(new JsonObject
+        {
+            ["value1"] = "{{ $json.type }}",
+            ["rules"] = new JsonArray(new JsonObject { ["value"] = "b", ["output"] = "abc" })
+        },
+            new JsonObject { ["type"] = "b" });
+
+        var result = await node.ExecuteAsync(ctx);
+        result.Succeeded.Should().BeFalse();
+        result.Error.Should().Contain("output");
+    }
+
+    [Fact]
+    public async Task Switch_fails_on_matched_rule_with_out_of_range_output()
+    {
+        var node = new SwitchNode();
+        var ctx = Ctx(new JsonObject
+        {
+            ["value1"] = "{{ $json.type }}",
+            ["rules"] = new JsonArray(new JsonObject { ["value"] = "b", ["output"] = 7 })
+        },
+            new JsonObject { ["type"] = "b" });
+
+        var result = await node.ExecuteAsync(ctx);
+        result.Succeeded.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task Switch_accepts_output_given_as_string()
+    {
+        // "output" string olarak verilse de ("2") dogru porta yonlendirilmeli (eskiden 0'a duserdi).
+        var node = new SwitchNode();
+        var ctx = Ctx(new JsonObject
+        {
+            ["value1"] = "{{ $json.type }}",
+            ["rules"] = new JsonArray(
+                new JsonObject { ["value"] = "a", ["output"] = "0" },
+                new JsonObject { ["value"] = "b", ["output"] = "2" })
+        },
+            new JsonObject { ["type"] = "b" });
+
+        var outputs = (await node.ExecuteAsync(ctx)).Outputs;
+        outputs[0].Should().BeEmpty();
+        outputs[2].Should().HaveCount(1);
+    }
 }

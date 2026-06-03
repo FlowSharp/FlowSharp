@@ -160,7 +160,7 @@ html[data-theme="dark"] .toast {
     margin-bottom: 14px;
 }
 
-.field > label {
+.field>label {
     display: block;
     margin-bottom: 5px;
     color: var(--nwf-muted);
@@ -216,6 +216,19 @@ html[data-theme="dark"] .toast {
 .nwf-sticky-textarea:disabled {
     opacity: .72;
     cursor: not-allowed;
+}
+
+.input[readonly],
+.textarea[readonly] {
+    background: var(--nwf-surface-2);
+    border-color: var(--nwf-border);
+    color: var(--nwf-muted);
+}
+
+.input[readonly]:focus,
+.textarea[readonly]:focus {
+    border-color: var(--nwf-border);
+    box-shadow: none;
 }
 
 .textarea {
@@ -293,12 +306,12 @@ html[data-theme="dark"] .toast {
     transition: transform .18s ease;
 }
 
-.switch input:checked + .slider {
+.switch input:checked+.slider {
     border-color: var(--nwf-success);
     background: var(--nwf-success);
 }
 
-.switch input:checked + .slider::before {
+.switch input:checked+.slider::before {
     transform: translateX(17px);
 }
 
@@ -578,6 +591,10 @@ html[data-theme="dark"] .toast {
 }
 
 /* Ports and edges -------------------------------------------------------- */
+.nwf-canvas:focus {
+    outline: none;
+}
+
 .nwf-port {
     position: absolute;
     z-index: 4;
@@ -587,7 +604,17 @@ html[data-theme="dark"] .toast {
     border-radius: 50%;
     background: var(--nwf-surface);
     cursor: crosshair;
-    transition: transform .14s ease, border-color .14s ease, background .14s ease, box-shadow .14s ease;
+    transition: transform .14s ease, border-color .14s ease, background .14s ease, box-shadow .14s ease, opacity .14s ease;
+}
+
+.nwf-port::after {
+    content: "";
+    position: absolute;
+    top: -8px;
+    left: -8px;
+    right: -8px;
+    bottom: -8px;
+    border-radius: 50%;
 }
 
 .nwf-port:hover {
@@ -595,6 +622,18 @@ html[data-theme="dark"] .toast {
     background: var(--nwf-edge-active);
     box-shadow: 0 0 0 4px color-mix(in srgb, var(--nwf-edge-active) 18%, transparent);
     transform: scale(1.18);
+}
+
+.nwf-port.nwf-port-compatible {
+    border-color: var(--nwf-success);
+    background: var(--nwf-success);
+    box-shadow: 0 0 0 6px color-mix(in srgb, var(--nwf-success) 24%, transparent);
+    transform: scale(1.18);
+}
+
+.nwf-port.nwf-port-incompatible {
+    opacity: 0.35;
+    pointer-events: none;
 }
 
 .nwf-port.in {
@@ -885,7 +924,7 @@ html[data-theme="dark"] .toast {
     transform: rotate(90deg) scale(.9);
 }
 
-.palette-cat > span:last-child {
+.palette-cat>span:last-child {
     min-width: 24px;
     border-radius: 999px;
     background: var(--nwf-surface-3);
@@ -895,7 +934,7 @@ html[data-theme="dark"] .toast {
     text-align: center;
 }
 
-.palette-subcat-row > span:last-child {
+.palette-subcat-row>span:last-child {
     min-width: 20px;
     background: color-mix(in srgb, var(--nwf-primary) 10%, var(--nwf-surface-3));
     font-size: 9.5px;
@@ -1073,8 +1112,28 @@ html[data-theme="dark"] .toast {
 
 .cred-row {
     display: flex;
-    gap: 8px;
+    align-items: center;
+    gap: 10px;
     margin-bottom: 8px;
+}
+
+/* Deger giris alanlari satiri doldurur; key etiketi sabit genislikte ve tek satir kalir. */
+.cred-row > .input {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.cred-key-label {
+    flex: 0 0 84px;
+    white-space: nowrap;
+    color: var(--nwf-muted);
+    font-size: 12px;
+    font-weight: 600;
+}
+
+/* Sil butonu input yuksekligine hizali, sabit kalir. */
+.cred-row > .btn {
+    flex: 0 0 auto;
 }
 
 .cred-add {
@@ -1083,6 +1142,34 @@ html[data-theme="dark"] .toast {
     border-radius: 8px;
     background: var(--nwf-surface-2);
     padding: 12px;
+}
+
+/* "+ Alan ekle": tam genislikte, kesik cizgili bir ekleme afordansi olarak durur. */
+.cred-add-field {
+    width: 100%;
+    justify-content: center;
+    border: 1px dashed var(--nwf-border);
+    color: var(--nwf-muted);
+    margin-top: 2px;
+}
+
+.cred-add-field:hover {
+    border-color: var(--nwf-border-strong);
+    color: var(--nwf-text);
+}
+
+/* Form footer: ayirici cizgi + saga hizali, esit genislikte Cancel/Save. */
+.cred-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid var(--nwf-border);
+}
+
+.cred-actions .btn {
+    min-width: 88px;
 }
 
 /* Sticky notes ----------------------------------------------------------- */
@@ -1454,6 +1541,7 @@ html[data-theme="dark"] .toast {
 }
 
 @keyframes nwf-bounce {
+
     0%,
     80%,
     100% {

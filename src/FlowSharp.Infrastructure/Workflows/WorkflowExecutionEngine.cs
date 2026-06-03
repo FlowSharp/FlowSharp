@@ -2,6 +2,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using FlowSharp.Application.Errors;
 using FlowSharp.Application.Nodes;
 using FlowSharp.Application.Nodes.Agents;
 using FlowSharp.Application.Nodes.Expressions;
@@ -93,11 +94,20 @@ public sealed class WorkflowExecutionEngine(
         var explicitStart = options.StartNodeName
             ?? (trigger.TryGetPropertyValue("node", out var triggerNode) ? triggerNode?.ToString() : null);
 
+        var implicitStarts = options.AllowSourceNodesWithoutTrigger
+            ? nodes.Where(node => !outerIncoming.ContainsKey(node.Id) && hasOutgoing.Contains(node.Id))
+            : nodes.Where(node => IsTrigger(node) && !outerIncoming.ContainsKey(node.Id) && hasOutgoing.Contains(node.Id));
+
         var startIds = (!string.IsNullOrEmpty(explicitStart)
                 ? nodes.Where(node => node.Name.Equals(explicitStart, StringComparison.OrdinalIgnoreCase)).Select(node => node.Id)
-                : nodes.Where(node => !outerIncoming.ContainsKey(node.Id) && hasOutgoing.Contains(node.Id)).Select(node => node.Id))
+                : implicitStarts.Select(node => node.Id))
             .Where(id => !allBodyIds.Contains(id))
             .ToHashSet(StringComparer.Ordinal);
+
+        if (startIds.Count == 0)
+        {
+            return new WorkflowRunResult(false, "Workflow'u baslatacak bagli trigger yok.", BuildOutput(outputsByName, runLog, captureData), runLog);
+        }
 
         var adjacency = outerConnections
             .GroupBy(connection => connection.FromId, StringComparer.Ordinal)
@@ -329,6 +339,7 @@ public sealed class WorkflowExecutionEngine(
                 JsonDocument.Parse("""{"source":"manual"}""").RootElement,
                 new WorkflowExecutionOptions
                 {
+                    AllowSourceNodesWithoutTrigger = true,
                     OnNodeCompleted = data =>
                     {
                         captured[data.NodeId] = ToItems(data.Output);
@@ -552,7 +563,7 @@ public sealed class WorkflowExecutionEngine(
         {
             logger.LogError(exception, "Node '{Name}' ({Type}) calismasi basarisiz.", node.Name, node.Type);
             return (new NodeRunData(node.Id, node.Name, node.Type, NodeRunStatus.Failed,
-                new JsonObject(), exception.Message, startedAt, DateTimeOffset.UtcNow, 0),
+                new JsonObject(), exception.ToUserMessage(), startedAt, DateTimeOffset.UtcNow, 0),
                 []);
         }
     }

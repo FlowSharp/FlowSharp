@@ -39,6 +39,9 @@ public static class WorkflowNodesDependencyInjection
         // AI Agent orkestrasyonu: provider'a ozel mantik generic motorda degil burada yasar.
         services.AddScoped<FlowSharp.Application.Nodes.Agents.IAgentExecutor, FlowSharp.Nodes.Ai.Agent.SemanticKernelAgentExecutor>();
 
+        // AI/model servis hatalarini merkezi hata ceviriciye tanit (kullanici dostu mesajlar).
+        FlowSharp.Nodes.Ai.AiErrorRules.Register(FlowSharp.Application.Errors.ErrorTranslator.Default);
+
         // RAG: tamamen yerel/in-process embedding (gomulu ONNX). Vektor deposu Infrastructure'da.
         services.AddSingleton<FlowSharp.Application.Ai.IEmbeddingGenerator, FlowSharp.Nodes.Ai.Embeddings.LocalEmbeddingGenerator>();
 

@@ -72,4 +72,25 @@ public class DeveloperAndAiNodeTests
         var item = (await node.ExecuteAsync(ctx)).PrimaryItems.Single().Json;
         item.ContainsKey("error").Should().BeTrue();
     }
+
+    // ---- AI servis hata kurali (merkezi ceviriciye kayitli) ----
+    [Fact]
+    public void Ai_rate_limit_error_maps_to_actionable_message()
+    {
+        var error = FlowSharp.Nodes.Ai.AiErrorRules.HttpOperation.Describe(
+            new Microsoft.SemanticKernel.HttpOperationException { StatusCode = System.Net.HttpStatusCode.TooManyRequests });
+
+        error.Message.Should().Contain("429");
+        error.Category.Should().Be(FlowSharp.Application.Errors.ErrorCategory.RateLimit);
+    }
+
+    [Fact]
+    public void Ai_unauthorized_error_maps_to_auth_message()
+    {
+        var error = FlowSharp.Nodes.Ai.AiErrorRules.HttpOperation.Describe(
+            new Microsoft.SemanticKernel.HttpOperationException { StatusCode = System.Net.HttpStatusCode.Unauthorized });
+
+        error.Category.Should().Be(FlowSharp.Application.Errors.ErrorCategory.Authentication);
+        error.Message.Should().Contain("API anahtari");
+    }
 }

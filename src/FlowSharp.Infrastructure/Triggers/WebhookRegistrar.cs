@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using FlowSharp.Application.Abstractions;
 using FlowSharp.Domain.Triggers;
 using FlowSharp.Infrastructure.Data;
+using FlowSharp.Infrastructure.Identity;
 
 namespace FlowSharp.Infrastructure.Triggers;
 
@@ -10,6 +11,8 @@ public sealed class WebhookRegistrar(ApplicationDbContext dbContext) : IWebhookR
 {
     public async Task SyncAsync(Guid workflowId, JsonElement definition, bool isActive, CancellationToken cancellationToken = default)
     {
+        var workflowKey = await ResolveWorkflowKeyAsync(workflowId, cancellationToken);
+
         // Once bu workflow'un mevcut kayitlarini temizle, sonra yeniden olustur.
         await dbContext.WebhookRegistrations
             .Where(registration => registration.WorkflowId == workflowId)
@@ -36,6 +39,7 @@ public sealed class WebhookRegistrar(ApplicationDbContext dbContext) : IWebhookR
             dbContext.WebhookRegistrations.Add(new WebhookRegistration
             {
                 WorkflowId = workflowId,
+                WorkflowKey = workflowKey,
                 NodeName = name,
                 Method = method,
                 Path = path.Trim('/'),
@@ -46,12 +50,16 @@ public sealed class WebhookRegistrar(ApplicationDbContext dbContext) : IWebhookR
         await dbContext.SaveChangesAsync(cancellationToken);
     }
 
-    public async Task<WebhookMatch?> ResolveAsync(string method, string path, CancellationToken cancellationToken = default)
+    public async Task<WebhookMatch?> ResolveAsync(string? workflowKey, string method, string path, CancellationToken cancellationToken = default)
     {
         var normalized = path.Trim('/');
+        var upperMethod = method.ToUpperInvariant();
         var registration = await dbContext.WebhookRegistrations
             .AsNoTracking()
-            .FirstOrDefaultAsync(item => item.IsActive && item.Path == normalized && item.Method == method.ToUpperInvariant(), cancellationToken);
+            .FirstOrDefaultAsync(item => item.IsActive
+                && item.WorkflowKey == workflowKey
+                && item.Path == normalized
+                && item.Method == upperMethod, cancellationToken);
 
         return registration is null ? null : new WebhookMatch(registration.WorkflowId, registration.NodeName);
     }
@@ -60,4 +68,30 @@ public sealed class WebhookRegistrar(ApplicationDbContext dbContext) : IWebhookR
         parameters.ValueKind == JsonValueKind.Object && parameters.TryGetProperty(key, out var value)
             ? value.ValueKind == JsonValueKind.String ? value.GetString() : value.GetRawText()
             : null;
+
+    private async Task<string> ResolveWorkflowKeyAsync(Guid workflowId, CancellationToken cancellationToken)
+    {
+        var existingKey = await dbContext.WebhookRegistrations
+            .AsNoTracking()
+            .Where(registration => registration.WorkflowId == workflowId && !string.IsNullOrEmpty(registration.WorkflowKey))
+            .Select(registration => registration.WorkflowKey)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        if (!string.IsNullOrWhiteSpace(existingKey) &&
+            !await dbContext.WebhookRegistrations.AsNoTracking()
+                .AnyAsync(registration => registration.WorkflowId != workflowId && registration.WorkflowKey == existingKey, cancellationToken))
+        {
+            return existingKey;
+        }
+
+        string candidate;
+        do
+        {
+            candidate = WebhookKeyGenerator.Generate();
+        }
+        while (await dbContext.WebhookRegistrations.AsNoTracking()
+            .AnyAsync(registration => registration.WorkflowKey == candidate, cancellationToken));
+
+        return candidate;
+    }
 }

@@ -76,18 +76,9 @@ public sealed class ExpressionEvaluator : IExpressionEvaluator
         return JsonValue.Create(EvaluateToString(template, context));
     }
 
-    private static JsonNode? Evaluate(string expression, ExpressionContext context)
-    {
-        try
-        {
-            return EvaluateReference(expression, context);
-        }
-        catch
-        {
-            // Cozulemeyen ifadeyi ham metin olarak birak
-            return JsonValue.Create($"{{{{ {expression} }}}}");
-        }
-    }
+    private static JsonNode Evaluate(string expression, ExpressionContext context) =>
+        EvaluateReference(expression, context)
+            ?? throw new ExpressionEvaluationException("Ifade cozulemedi (alan bulunamadi veya gecersiz).");
 
     private static JsonNode? EvaluateReference(string expression, ExpressionContext context)
     {

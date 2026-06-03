@@ -74,6 +74,7 @@
         }
 
         isDarkMode = await JS.InvokeAsync<bool>("FlowSharp.get");
+        await JS.InvokeVoidAsync("FlowSharp.set", isDarkMode);
         StateHasChanged();
     }
 

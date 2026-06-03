@@ -2,6 +2,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using FlowSharp.Application.Abstractions;
+using FlowSharp.Application.Errors;
 
 namespace FlowSharp.Infrastructure.Queue;
 
@@ -19,7 +20,11 @@ public class QueueWorkerService(IServiceScopeFactory scopeFactory, ILogger<Queue
             var queue = scope.ServiceProvider.GetRequiredService<IWorkflowQueue>();
             var runner = scope.ServiceProvider.GetRequiredService<IWorkflowRunner>();
 
-            var job = await queue.DequeueAsync(workerId, TimeSpan.FromMinutes(5), stoppingToken);
+            // Kilit suresi, tek bir isin makul azami sure'sinden belirgin sekilde uzun olmali:
+            // aksi halde hala calisan uzun bir is (orn. Wait node, ust sinir 300s = 5 dk) kilidi
+            // dolup "terk edilmis" sanilarak baska bir worker tarafindan yeniden alinir (cift
+            // calistirma). 15 dk, Wait ust sinirinin uzerinde guvenli bir paydir.
+            var job = await queue.DequeueAsync(workerId, TimeSpan.FromMinutes(15), stoppingToken);
             if (job is null)
             {
                 await Task.Delay(TimeSpan.FromSeconds(3), stoppingToken);
@@ -36,7 +41,7 @@ public class QueueWorkerService(IServiceScopeFactory scopeFactory, ILogger<Queue
             catch (Exception exception)
             {
                 logger.LogError(exception, "Workflow job {JobId} basarisiz oldu.", job.Id);
-                await queue.FailAsync(job.Id, exception.Message, stoppingToken);
+                await queue.FailAsync(job.Id, exception.ToUserMessage(), stoppingToken);
             }
         }
     }

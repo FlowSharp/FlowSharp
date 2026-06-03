@@ -25,7 +25,7 @@
         </label>
         @if (!IsReadOnly)
         {
-            <button class="btn btn-success btn-sm" @onclick="ExecuteAsync" disabled="@(nodes.Count == 0 || running)">
+            <button class="btn btn-success btn-sm" @onclick="ExecuteAsync" disabled="@(nodes.Count == 0 || running || !CanRunWorkflow)">
                 @(running ? L["designer.running"] : $"▶ {L["common.run"]}")
             </button>
             <button class="btn btn-primary btn-sm" @onclick="SaveAsync">@L["common.save"]</button>
@@ -39,7 +39,7 @@
         </div>
     }
 
-    <div class="nwf-canvas" id="nwf-canvas">
+    <div class="nwf-canvas" id="nwf-canvas" tabindex="0">
         <div class="nwf-world">
             <svg class="nwf-edges"></svg>
 
@@ -133,13 +133,13 @@
                         @for (var k = 0; k < mainIns.Count; k++)
                         {
                             <div class="nwf-port in" id="port-@node.InstanceId-in-@mainIns[k].Idx"
-                                 data-node="@node.InstanceId" data-port="@mainIns[k].Idx"
+                                 data-node="@node.InstanceId" data-port="@mainIns[k].Idx" data-port-type="main"
                                  style="top:@(PortTop(k, mainIns.Count))px"></div>
                         }
                         @for (var k = 0; k < subIns.Count; k++)
                         {
                             <div class="nwf-port in sub-in" id="port-@node.InstanceId-in-@subIns[k].Idx"
-                                 data-node="@node.InstanceId" data-port="@subIns[k].Idx"
+                                 data-node="@node.InstanceId" data-port="@subIns[k].Idx" data-port-type="sub"
                                  style="left:@(BottomX(k, subIns.Count))px">
                                 <span class="nwf-port-label sub">@subIns[k].Port.Label</span>
                             </div>
@@ -172,7 +172,7 @@
                         @for (var k = 0; k < mainOuts.Count; k++)
                         {
                             <div class="nwf-port out" id="port-@node.InstanceId-out-@mainOuts[k].Idx"
-                                 data-node="@node.InstanceId" data-port="@mainOuts[k].Idx"
+                                 data-node="@node.InstanceId" data-port="@mainOuts[k].Idx" data-port-type="main"
                                  style="top:@(PortTop(k, mainOuts.Count))px">
                                 @if (mainOuts.Count > 1)
                                 {
@@ -183,7 +183,7 @@
                         @for (var k = 0; k < subOuts.Count; k++)
                         {
                             <div class="nwf-port out sub-out" id="port-@node.InstanceId-out-@subOuts[k].Idx"
-                                 data-node="@node.InstanceId" data-port="@subOuts[k].Idx"
+                                 data-node="@node.InstanceId" data-port="@subOuts[k].Idx" data-port-type="sub"
                                  style="left:@(BottomX(k, subOuts.Count))px"></div>
                         }
                     </div>
@@ -328,7 +328,7 @@
                 <div class="sp"></div>
                 @if (!IsReadOnly)
                 {
-                    <button class="btn btn-success btn-sm" @onclick="ExecuteAsync" disabled="@running">▶ @L["common.run"]</button>
+                    <button class="btn btn-success btn-sm" @onclick="ExecuteAsync" disabled="@(running || !CanRunWorkflow)">▶ @L["common.run"]</button>
                 }
                 <button class="nwf-drawer-close" @onclick="CloseNdv">✕</button>
             </div>
@@ -354,12 +354,17 @@
 
                     @if (def is not null && def.Key == "webhook.trigger")
                     {
+                        var webhookUrlReady = workflow is not null;
                         <div class="field">
                             <label>@L["designer.ndv.webhook_url"]</label>
                             <div style="display:flex; gap:8px; align-items:center">
                                 <input class="input" readonly value="@WebhookUrl(openNode)" style="font-family:'JetBrains Mono',Consolas,monospace; font-size:12px" />
                                 <button class="btn btn-ghost btn-sm" title="Kopyala" @onclick="() => CopyAsync(WebhookUrl(openNode))">📋</button>
                             </div>
+                            @if (!webhookUrlReady)
+                            {
+                                <div class="expr-hint expr-err">@L["designer.ndv.webhook_save_first"]</div>
+                            }
                             <div class="hint">Bu adrese @(GetParam(openNode, "method") is { Length: > 0 } m ? m : "POST") istegi gelince workflow tetiklenir.</div>
                         </div>
                     }
@@ -435,10 +440,10 @@
                                                     }
                                                 </div>
                                             }
-                                            <button class="btn btn-ghost btn-sm" @onclick="() => credAddFields.Add(new())">+ @L["designer.ndv.add_field"]</button>
-                                            <div style="margin-top:10px; display:flex; gap:8px">
-                                                <button class="btn btn-primary btn-sm" @onclick="() => SaveCredAddAsync(def, p.Key)">@L["common.save"]</button>
-                                                <button class="btn btn-ghost btn-sm" @onclick="() => credAddOpen = false">@L["common.cancel"]</button>
+                                            <button class="btn btn-ghost btn-sm cred-add-field" @onclick="() => credAddFields.Add(new())">+ @L["designer.ndv.add_field"]</button>
+                                            <div class="cred-actions">
+                                                <button class="btn btn-ghost" @onclick="() => credAddOpen = false">@L["common.cancel"]</button>
+                                                <button class="btn btn-primary" @onclick="() => SaveCredAddAsync(def, p.Key)">@L["common.save"]</button>
                                             </div>
                                         </div>
                                     }
@@ -590,6 +595,10 @@
             {
                 <div class="nwf-chat-msg @(msg.IsUser ? "user" : "bot")">@msg.Text</div>
             }
+            @if (!CanSendChat)
+            {
+                <div class="nwf-chat-msg bot">@L["designer.chat.not_connected"]</div>
+            }
             @if (ShowTyping)
             {
                 <div class="nwf-chat-msg bot typing">
@@ -601,17 +610,12 @@
         </div>
         <div class="nwf-chat-input">
             <input class="nwf-chat-text-input" placeholder="@L["designer.chat.input_placeholder"]" @bind="chatInput" @bind:event="oninput"
-                   @onkeydown="OnChatKeyDown" disabled="@chatBusy" />
-            <button class="nwf-chat-send-btn" @onclick="SendChatAsync" disabled="@(chatBusy || string.IsNullOrWhiteSpace(chatInput))" title="@L["common.send"]">
+                   @onkeydown="OnChatKeyDown" disabled="@(chatBusy || !CanSendChat)" />
+            <button class="nwf-chat-send-btn" @onclick="SendChatAsync" disabled="@(chatBusy || !CanSendChat || string.IsNullOrWhiteSpace(chatInput))" title="@L["common.send"]">
                 <i class="bi bi-send-fill"></i>
             </button>
         </div>
     </div>
-}
-
-@if (!string.IsNullOrWhiteSpace(toast))
-{
-    <div class="toast @(toastError ? "error" : "")">@toast</div>
 }
 
 

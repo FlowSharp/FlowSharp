@@ -7,6 +7,11 @@
     <Project Path="src/FlowSharp.Web/FlowSharp.Web.csproj" />
     <Project Path="src/FlowSharp.Worker/FlowSharp.Worker.csproj" />
   </Folder>
+  <Folder Name="/src/Migrations/">
+    <Project Path="src/FlowSharp.Migrations.Sqlite/FlowSharp.Migrations.Sqlite.csproj" />
+    <Project Path="src/FlowSharp.Migrations.Postgres/FlowSharp.Migrations.Postgres.csproj" />
+    <Project Path="src/FlowSharp.Migrations.SqlServer/FlowSharp.Migrations.SqlServer.csproj" />
+  </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/FlowSharp.Tests/FlowSharp.Tests.csproj" />
     <Project Path="tests/FlowSharp.Benchmarks/FlowSharp.Benchmarks.csproj" />

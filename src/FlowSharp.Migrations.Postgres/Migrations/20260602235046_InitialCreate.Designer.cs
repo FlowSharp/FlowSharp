@@ -13,7 +13,7 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace FlowSharp.Migrations.Postgres.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    [Migration("20260602151938_InitialCreate")]
+    [Migration("20260602235046_InitialCreate")]
     partial class InitialCreate
     {
         /// <inheritdoc />
@@ -79,6 +79,10 @@ namespace FlowSharp.Migrations.Postgres.Migrations
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<string>("DedupeKey")
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)");
+
                     b.Property<Guid?>("ExecutionId")
                         .HasColumnType("uuid");
 
@@ -110,6 +114,9 @@ namespace FlowSharp.Migrations.Postgres.Migrations
                         .HasColumnType("uuid");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("DedupeKey")
+                        .IsUnique();
 
                     b.HasIndex("LockedUntil");
 
@@ -151,11 +158,15 @@ namespace FlowSharp.Migrations.Postgres.Migrations
                     b.Property<Guid>("WorkflowId")
                         .HasColumnType("uuid");
 
+                    b.Property<string>("WorkflowKey")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
                     b.HasKey("Id");
 
                     b.HasIndex("WorkflowId");
 
-                    b.HasIndex("Method", "Path");
+                    b.HasIndex("WorkflowKey", "Method", "Path");
 
                     b.ToTable("webhook_registrations", (string)null);
                 });

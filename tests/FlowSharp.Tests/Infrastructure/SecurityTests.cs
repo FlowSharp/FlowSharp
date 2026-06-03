@@ -97,13 +97,26 @@ public class PrivateNetworkBlockingHandlerTests
     }
 
     [Theory]
-    [InlineData("http://[::1]/")]            // IPv6 loopback
-    [InlineData("http://[fc00::1]/")]        // IPv6 unique-local
-    [InlineData("http://[fe80::1]/")]        // IPv6 link-local
+    [InlineData("http://[::1]/")]                  // IPv6 loopback
+    [InlineData("http://[fc00::1]/")]              // IPv6 unique-local
+    [InlineData("http://[fe80::1]/")]              // IPv6 link-local
+    [InlineData("http://[64:ff9b::7f00:1]/")]      // NAT64 -> 127.0.0.1
+    [InlineData("http://[64:ff9b::a9fe:a9fe]/")]   // NAT64 -> 169.254.169.254 (bulut metadata)
+    [InlineData("http://[2002:7f00:1::]/")]        // 6to4 -> 127.0.0.1
+    [InlineData("http://[::10.0.0.5]/")]           // IPv4-compatible -> 10.0.0.5
     public async Task Blocks_private_ipv6_literals(string url)
     {
         var act = async () => await Client(block: true).GetAsync(url);
         await act.Should().ThrowAsync<InvalidOperationException>();
+    }
+
+    [Theory]
+    [InlineData("http://[64:ff9b::808:808]/")]     // NAT64 -> 8.8.8.8 (public)
+    [InlineData("http://[2002:808:808::]/")]       // 6to4 -> 8.8.8.8 (public)
+    public async Task Allows_public_embedded_ipv4_ipv6_literals(string url)
+    {
+        var response = await Client(block: true).GetAsync(url);
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
     }
 
     [Theory]

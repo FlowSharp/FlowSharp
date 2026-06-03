@@ -110,18 +110,23 @@ public class ExpressionEvaluatorTests
     }
 
     [Fact]
-    public void Evaluate_unknown_reference_returns_empty()
+    public void Evaluate_unknown_reference_throws()
     {
         var ctx = Context(new JsonObject { ["x"] = 1 });
-        evaluator.EvaluateToString("{{ $json.missing }}", ctx).Should().BeEmpty();
+        var act = () => evaluator.EvaluateToString("{{ $json.missing }}", ctx);
+
+        act.Should().Throw<ExpressionEvaluationException>()
+            .WithMessage("Ifade cozulemedi*");
     }
 
     [Fact]
-    public void Evaluate_unparseable_root_left_as_raw_template()
+    public void Evaluate_unparseable_root_throws()
     {
-        // Bilinmeyen kok ($foo) null doner -> string olarak bos.
         var ctx = Context(new JsonObject());
-        evaluator.EvaluateToString("a{{ $foo.bar }}b", ctx).Should().Be("ab");
+        var act = () => evaluator.EvaluateToString("a{{ $foo.bar }}b", ctx);
+
+        act.Should().Throw<ExpressionEvaluationException>()
+            .WithMessage("Ifade cozulemedi*");
     }
 
     [Fact]
@@ -146,16 +151,22 @@ public class ExpressionEvaluatorTests
     }
 
     [Fact]
-    public void Evaluate_node_without_name_returns_empty()
+    public void Evaluate_node_without_name_throws()
     {
-        evaluator.EvaluateToString("{{ $node }}", Context()).Should().BeEmpty();
+        var act = () => evaluator.EvaluateToString("{{ $node }}", Context());
+
+        act.Should().Throw<ExpressionEvaluationException>()
+            .WithMessage("Ifade cozulemedi*");
     }
 
     [Fact]
-    public void Evaluate_array_index_out_of_range_returns_empty()
+    public void Evaluate_array_index_out_of_range_throws()
     {
         var ctx = Context(new JsonObject { ["arr"] = new JsonArray(1, 2) });
-        evaluator.EvaluateToString("{{ $json.arr[5] }}", ctx).Should().BeEmpty();
+        var act = () => evaluator.EvaluateToString("{{ $json.arr[5] }}", ctx);
+
+        act.Should().Throw<ExpressionEvaluationException>()
+            .WithMessage("Ifade cozulemedi*");
     }
 
     [Fact]

@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Web;
 using Microsoft.JSInterop;
+using FlowSharp.Application.Errors;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -32,10 +33,12 @@ public partial class WorkflowDesigner : IAsyncDisposable
     [Inject] public IWorkflowEventPublisher EventPublisher { get; set; } = default!;
     [Inject] public FlowSharp.Application.Nodes.Expressions.IExpressionEvaluator Evaluator { get; set; } = default!;
     [Inject] public Microsoft.AspNetCore.Components.Authorization.AuthenticationStateProvider AuthenticationStateProvider { get; set; } = default!;
+    [Inject] public FlowSharp.Web.Services.IUiNotifier Notifier { get; set; } = default!;
     // Not: Node adi/aciklamasi NodeCatalog tarafindan zaten yerellestirilir; ayrica helper gerekmez.
 
     private string? currentUserId;
     private bool isAdmin;
+    private string? webhookWorkflowKey;
 
     [Parameter] public Guid? WorkflowId { get; set; }
     [Parameter] public Guid? ExecutionId { get; set; }
@@ -70,8 +73,6 @@ public partial class WorkflowDesigner : IAsyncDisposable
     private bool showPalette;
     private string? paletteSearch;
     private bool running;
-    private string? toast;
-    private bool toastError;
 
     private readonly HashSet<string> expandedCats = [];
     private readonly HashSet<string> expandedSubCats = [];
@@ -87,6 +88,8 @@ public partial class WorkflowDesigner : IAsyncDisposable
     private readonly List<CredField> credAddFields = [];
 
     private bool HasChatTrigger => nodes.Any(n => n.NodeKey == "chat.trigger");
+    private bool CanRunWorkflow => TriggerStartNodes().Any();
+    private bool CanSendChat => ChatStartNode() is not null;
 
     private IJSObjectReference? module;
     private DotNetObjectReference<WorkflowDesigner>? selfRef;
@@ -126,6 +129,7 @@ public partial class WorkflowDesigner : IAsyncDisposable
         workflowName = workflow.Name;
         description = workflow.Description;
         isActive = workflow.IsActive;
+        webhookWorkflowKey = await LoadWebhookWorkflowKeyAsync(workflow.Id);
         LoadDefinition(workflow.Definition.RootElement);
 
         if (ExecutionId.HasValue)
@@ -173,7 +177,7 @@ public partial class WorkflowDesigner : IAsyncDisposable
             }
             catch (Exception ex)
             {
-                await ShowToast($"Geçmiş çalışma verisi yüklenirken hata oluştu: {ex.Message}", true);
+                await ShowToast($"Geçmiş çalışma verisi yüklenirken hata oluştu: {ex.ToUserMessage()}", true);
             }
         }
     }
@@ -324,6 +328,18 @@ public partial class WorkflowDesigner : IAsyncDisposable
     }
 
     [JSInvokable]
+    public Task OnKeyDown(string key)
+    {
+        if (IsReadOnly) return Task.CompletedTask;
+        if ((key == "Delete" || key == "Backspace") && !string.IsNullOrEmpty(selectedId))
+        {
+            RemoveNode(selectedId);
+            StateHasChanged();
+        }
+        return Task.CompletedTask;
+    }
+
+    [JSInvokable]
     public Task OnNodeSelected(string id)
     {
         selectedId = id;
@@ -380,11 +396,16 @@ public partial class WorkflowDesigner : IAsyncDisposable
         needsSync = true;
     }
 
-    private string UniqueName(string baseName)
+    // Isim karsilastirmasi motorun $node["Ad"] cozumuyle ayni olmali: OrdinalIgnoreCase.
+    // Aksi halde "HTTP" ve "http" tasarimcida farkli gorunup motorda cakisirdi.
+    private string UniqueName(string baseName, string? excludeId = null)
     {
-        if (!nodes.Any(n => n.Name == baseName)) return baseName;
+        bool Taken(string candidate) =>
+            nodes.Any(n => n.InstanceId != excludeId && string.Equals(n.Name, candidate, StringComparison.OrdinalIgnoreCase));
+
+        if (!Taken(baseName)) return baseName;
         var i = 1;
-        while (nodes.Any(n => n.Name == $"{baseName} {i}")) i++;
+        while (Taken($"{baseName} {i}")) i++;
         return $"{baseName} {i}";
     }
 
@@ -399,7 +420,12 @@ public partial class WorkflowDesigner : IAsyncDisposable
 
     private void RenameNode(DesignerNode node, string? name)
     {
-        if (!string.IsNullOrWhiteSpace(name)) node.Name = name;
+        if (string.IsNullOrWhiteSpace(name)) return;
+
+        // Baska bir node ayni adi (buyuk/kucuk harf duyarsiz) kullaniyorsa benzersizlestir;
+        // boylece motorun isim-bazli ($node["Ad"]) cozumunde ve cikti raporunda sessiz cakisma olmaz.
+        node.Name = UniqueName(name.Trim(), node.InstanceId);
+        needsSync = true;
     }
 
     private string GetParam(DesignerNode node, string key) =>
@@ -408,12 +434,21 @@ public partial class WorkflowDesigner : IAsyncDisposable
     private void SetParam(DesignerNode node, string key, string? value) =>
         node.Parameters[key] = value ?? string.Empty;
 
-    /// <summary>Webhook node'unun tam cagri adresi: {base}/webhook/{path}.</summary>
+    /// <summary>Webhook node'unun tam cagri adresi: {base}/webhook/{workflowKey}/{path}.</summary>
     private string WebhookUrl(DesignerNode node)
     {
         var path = (GetParam(node, "path") ?? "my-webhook").Trim().Trim('/');
-        return $"{Navigation.BaseUri.TrimEnd('/')}/webhook/{path}";
+        // workflowKey workflow'a gore izolasyon saglar; henuz uretilmediyse yer tutucu goster.
+        var key = string.IsNullOrEmpty(webhookWorkflowKey) ? "{key}" : webhookWorkflowKey;
+        return $"{Navigation.BaseUri.TrimEnd('/')}/webhook/{key}/{path}";
     }
+
+    private async Task<string?> LoadWebhookWorkflowKeyAsync(Guid workflowId) =>
+        await DbContext.WebhookRegistrations
+            .AsNoTracking()
+            .Where(registration => registration.WorkflowId == workflowId)
+            .Select(registration => registration.WorkflowKey)
+            .FirstOrDefaultAsync();
 
     // Bilgisayardan secilen dosyayi { fileName, content(base64) } olarak parametreye yazar.
     private async Task OnFileSelectedAsync(DesignerNode node, string key, Microsoft.AspNetCore.Components.Forms.InputFileChangeEventArgs e)
@@ -434,7 +469,7 @@ public partial class WorkflowDesigner : IAsyncDisposable
         }
         catch (Exception ex)
         {
-            await ShowToast($"Dosya yuklenemedi: {ex.Message}", true);
+            await ShowToast($"Dosya yuklenemedi: {ex.ToUserMessage()}", true);
         }
     }
 
@@ -498,12 +533,19 @@ public partial class WorkflowDesigner : IAsyncDisposable
         }
         await DbContext.SaveChangesAsync();
         await WebhookRegistrar.SyncAsync(workflow.Id, workflow.Definition.RootElement, isActive);
+        webhookWorkflowKey = await LoadWebhookWorkflowKeyAsync(workflow.Id);
         await ShowToast("Workflow kaydedildi.");
         if (WorkflowId is null) Navigation.NavigateTo($"workflows/designer/{workflow.Id}");
     }
 
     private async Task ExecuteAsync()
     {
+        if (!CanRunWorkflow)
+        {
+            await ShowToast(L["designer.run.no_connected_trigger"], true);
+            return;
+        }
+
         running = true;
         foreach (var n in nodes) n.Status = "";
         runOutputs.Clear();
@@ -538,7 +580,7 @@ public partial class WorkflowDesigner : IAsyncDisposable
         }
         catch (Exception ex)
         {
-            await ShowToast($"Hata: {ex.Message}", true);
+            await ShowToast($"Hata: {ex.ToUserMessage()}", true);
         }
         finally
         {
@@ -649,13 +691,21 @@ public partial class WorkflowDesigner : IAsyncDisposable
         }
     }
 
-    private async Task ShowToast(string message, bool error = false)
+    // Bildirimler uygulamanin geri kalaniyla tutarli olsun diye merkezi IUiNotifier (MudBlazor
+    // Snackbar) uzerinden gosterilir. Boylece designer'a ozel toast'in MudBlazor overlay'leri
+    // altinda gizlenmesi/kopmasi sorunu da ortadan kalkar.
+    private Task ShowToast(string message, bool error = false)
     {
-        toast = message; toastError = error;
-        StateHasChanged();
-        await Task.Delay(2600);
-        toast = null;
-        StateHasChanged();
+        if (error)
+        {
+            Notifier.Error(message);
+        }
+        else
+        {
+            Notifier.Success(message);
+        }
+
+        return Task.CompletedTask;
     }
 
     // ---------- Palette (collapsible) ----------
@@ -669,8 +719,22 @@ public partial class WorkflowDesigner : IAsyncDisposable
 
     private DesignerNode? UpstreamNode(DesignerNode node)
     {
-        var conn = connections.FirstOrDefault(c => c.ToId == node.InstanceId);
-        return conn is null ? null : nodes.FirstOrDefault(n => n.InstanceId == conn.FromId);
+        var incoming = connections.Where(c => c.ToId == node.InstanceId).ToList();
+        if (incoming.Count == 0)
+        {
+            return null;
+        }
+
+        // Ana-akis (Main) girisini tercih et. AI alt-node baglantilari (model/tool/memory portlari)
+        // veri akisinin girdisi degildir; motor da bunlari ana akistan ayirir (IsAiConnection).
+        // Aksi halde girdi onizlemesi/ifade cozumu yanlislikla model node'unu kaynak alip
+        // "{{$json.text}}" gibi ifadeleri cozemez ("alan bulunamadi") gosterirdi.
+        var def = Definition(node.NodeKey);
+        bool IsMainInput(DesignerConnection c) =>
+            def is null || c.ToPort >= def.InputPorts.Count || def.InputPorts[c.ToPort].Type == NodePortType.Main;
+
+        var conn = incoming.FirstOrDefault(IsMainInput) ?? incoming[0];
+        return nodes.FirstOrDefault(n => n.InstanceId == conn.FromId);
     }
 
     private string? UpstreamName(DesignerNode node) => UpstreamNode(node)?.Name;
@@ -724,7 +788,7 @@ public partial class WorkflowDesigner : IAsyncDisposable
         }
         catch (Exception ex)
         {
-            dynErrors[parameterKey] = ex.Message;
+            dynErrors[parameterKey] = ex.ToUserMessage();
         }
         finally
         {
@@ -791,7 +855,7 @@ public partial class WorkflowDesigner : IAsyncDisposable
         }
         catch (Exception ex)
         {
-            return ExprPreview.Invalid(ex.Message);
+            return ExprPreview.Invalid(ex.ToUserMessage());
         }
     }
 
@@ -917,6 +981,15 @@ public partial class WorkflowDesigner : IAsyncDisposable
         var message = chatInput?.Trim();
         if (string.IsNullOrEmpty(message) || chatBusy) return;
 
+        var chatStart = ChatStartNode();
+        if (chatStart is null)
+        {
+            chatMessages.Add(new ChatMessage(false, L["designer.chat.not_connected"]));
+            chatInput = "";
+            StateHasChanged();
+            return;
+        }
+
         chatMessages.Add(new ChatMessage(true, message));
         var botMessage = new ChatMessage(false, "");
         chatMessages.Add(botMessage);
@@ -934,6 +1007,7 @@ public partial class WorkflowDesigner : IAsyncDisposable
             {
                 WorkflowId = WorkflowId,
                 ActorOwnerId = currentUserId,
+                StartNodeName = chatStart.Name,
                 OnTextDelta = chatStreamEnabled
                     ? async delta =>
                     {
@@ -968,7 +1042,7 @@ public partial class WorkflowDesigner : IAsyncDisposable
         }
         catch (Exception ex)
         {
-            botMessage.Text = $"Hata: {ex.Message}";
+            botMessage.Text = $"Hata: {ex.ToUserMessage()}";
         }
         finally
         {
@@ -979,7 +1053,7 @@ public partial class WorkflowDesigner : IAsyncDisposable
 
     private bool IsChatStreamEnabled()
     {
-        var trigger = nodes.FirstOrDefault(n => n.NodeKey == "chat.trigger");
+        var trigger = ChatStartNode();
         if (trigger is null)
         {
             return true;
@@ -988,6 +1062,23 @@ public partial class WorkflowDesigner : IAsyncDisposable
         return !trigger.Parameters.TryGetValue("chatStream", out var value) ||
             !bool.TryParse(value, out var enabled) ||
             enabled;
+    }
+
+    private DesignerNode? ChatStartNode() =>
+        nodes.FirstOrDefault(node =>
+            node.NodeKey == "chat.trigger" &&
+            connections.Any(connection => connection.FromId == node.InstanceId && IsMainOutput(node, connection.FromPort)));
+
+    private IEnumerable<DesignerNode> TriggerStartNodes() =>
+        nodes.Where(node =>
+            Definition(node.NodeKey)?.Kind == NodeKind.Trigger &&
+            !connections.Any(connection => connection.ToId == node.InstanceId) &&
+            connections.Any(connection => connection.FromId == node.InstanceId && IsMainOutput(node, connection.FromPort)));
+
+    private bool IsMainOutput(DesignerNode node, int port)
+    {
+        var def = Definition(node.NodeKey);
+        return def is null || port >= def.OutputPorts.Count || def.OutputPorts[port].Type == NodePortType.Main;
     }
 
     private static string ExtractReply(WorkflowRunResult result)

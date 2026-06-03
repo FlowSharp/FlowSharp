@@ -11,7 +11,7 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace FlowSharp.Migrations.Sqlite.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    [Migration("20260602151909_InitialCreate")]
+    [Migration("20260602235019_InitialCreate")]
     partial class InitialCreate
     {
         /// <inheritdoc />
@@ -73,6 +73,10 @@ namespace FlowSharp.Migrations.Sqlite.Migrations
                     b.Property<long>("CreatedAt")
                         .HasColumnType("INTEGER");
 
+                    b.Property<string>("DedupeKey")
+                        .HasMaxLength(300)
+                        .HasColumnType("TEXT");
+
                     b.Property<Guid?>("ExecutionId")
                         .HasColumnType("TEXT");
 
@@ -104,6 +108,9 @@ namespace FlowSharp.Migrations.Sqlite.Migrations
                         .HasColumnType("TEXT");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("DedupeKey")
+                        .IsUnique();
 
                     b.HasIndex("LockedUntil");
 
@@ -145,11 +152,15 @@ namespace FlowSharp.Migrations.Sqlite.Migrations
                     b.Property<Guid>("WorkflowId")
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("WorkflowKey")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
                     b.HasKey("Id");
 
                     b.HasIndex("WorkflowId");
 
-                    b.HasIndex("Method", "Path");
+                    b.HasIndex("WorkflowKey", "Method", "Path");
 
                     b.ToTable("webhook_registrations", (string)null);
                 });

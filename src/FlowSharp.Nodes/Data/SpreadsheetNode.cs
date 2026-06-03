@@ -4,6 +4,7 @@ using System.Text.Json.Nodes;
 using ClosedXML.Excel;
 using CsvHelper;
 using CsvHelper.Configuration;
+using FlowSharp.Application.Errors;
 using FlowSharp.Application.Nodes;
 using FlowSharp.Domain.Nodes;
 
@@ -52,7 +53,7 @@ public sealed class SpreadsheetNode : NodeType
         }
         catch (Exception ex)
         {
-            return Task.FromResult(NodeExecutionResult.Failure($"Dosya cozumlenemedi: {ex.Message}"));
+            return Task.FromResult(NodeExecutionResult.Failure($"Dosya cozumlenemedi: {ex.ToUserMessage()}"));
         }
 
         var hasHeader = context.GetBoolean("hasHeader", defaultValue: true);

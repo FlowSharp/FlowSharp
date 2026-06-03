@@ -59,8 +59,13 @@ public sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext> 
             entity.Property(job => job.Payload).ConfigureJsonDocument(jsonColumnType);
             entity.Property(job => job.LockedBy).HasMaxLength(200);
             entity.Property(job => job.LastError).HasMaxLength(4000);
+            entity.Property(job => job.DedupeKey).HasMaxLength(300);
             entity.HasIndex(job => new { job.Status, job.AvailableAt });
             entity.HasIndex(job => job.LockedUntil);
+            // Idempotency: ayni anahtarla yalniz tek is. Nullable oldugundan SQL Server
+            // saglayicisi otomatik olarak "DedupeKey IS NOT NULL" filtreli unique index uretir;
+            // Postgres/SQLite'ta birden cok NULL zaten serbesttir (manuel enqueue'lar null kullanir).
+            entity.HasIndex(job => job.DedupeKey).IsUnique();
         });
 
         builder.Entity<Credential>(entity =>
@@ -80,7 +85,9 @@ public sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext> 
             entity.Property(registration => registration.NodeName).HasMaxLength(200).IsRequired();
             entity.Property(registration => registration.Method).HasMaxLength(10).IsRequired();
             entity.Property(registration => registration.Path).HasMaxLength(400).IsRequired();
-            entity.HasIndex(registration => new { registration.Method, registration.Path });
+            entity.Property(registration => registration.WorkflowKey).HasMaxLength(64);
+            // Cozumleme ve workflow'a gore izolasyon: (WorkflowKey, Method, Path).
+            entity.HasIndex(registration => new { registration.WorkflowKey, registration.Method, registration.Path });
             entity.HasIndex(registration => registration.WorkflowId);
         });
 

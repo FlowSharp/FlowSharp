@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
+using FlowSharp.Application.Errors;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -93,7 +94,7 @@ public partial class Workflows
         }
         catch (Exception ex)
         {
-            Notifier.Error(string.Format(L["workflows.msg.run_failed"], ex.Message));
+            Notifier.Error(string.Format(L["workflows.msg.run_failed"], ex.ToUserMessage()));
         }
         finally
         {

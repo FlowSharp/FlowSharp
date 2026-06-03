@@ -369,8 +369,8 @@ FlowSharp seeds four roles:
 
 | Role | Intended access |
 | --- | --- |
-| Admin | Full access, including credential and plugin management. |
-| Editor | Workflow read/write/execute and execution read. |
+| Admin | Full access, including all credentials and plugin management. |
+| Editor | Workflow read/write/execute, execution read, and management of their own credentials. |
 | Member | Default role for self-registered users; same as Editor. |
 | Viewer | Workflow read and execution read. |
 
@@ -382,13 +382,13 @@ Permission names:
 | `workflows.write` | Create, edit, and delete workflows. |
 | `workflows.execute` | Run workflows. |
 | `executions.read` | View execution history. |
-| `credentials.manage` | Create, edit, delete, and view stored credentials (Admin only). |
+| `credentials.manage` | Create, edit, delete, and view stored credentials. Owner-scoped for non-admins (Editor/Member manage only their own; Admin manages all). |
 | `plugins.manage` | Install, reload, and remove plugins. |
 
 Important notes:
 
 - `plugins.manage` is highly privileged because plugins run trusted server-side code.
-- `credentials.manage` is highly privileged because it exposes decrypted credential values; it is granted to Admin only.
+- `credentials.manage` exposes decrypted credential values; it is owner-scoped for non-admins (Editor/Member see only their own credentials), while Admin can view all.
 - `workflows.write` is powerful because workflows can call external services, database nodes, code nodes, and AI tools.
 - `workflows.execute` is powerful when existing workflows contain sensitive credentials or side effects.
 

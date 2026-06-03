@@ -86,4 +86,103 @@ public class WorkflowQueueTests : IDisposable
         var dequeued = await NewQueue().DequeueAsync("w", TimeSpan.FromMinutes(1));
         dequeued!.Id.Should().Be(first.Id);
     }
+
+    [Fact]
+    public async Task Dequeue_reclaims_processing_job_whose_lock_expired()
+    {
+        // Bir is alindi (Processing) ama worker cokup tamamlayamadi: kilit suresi gecmise cekiliyor.
+        var job = await NewQueue().EnqueueAsync(Guid.NewGuid(), Payload());
+        await NewQueue().DequeueAsync("crashed-worker", TimeSpan.FromMinutes(5));
+
+        await using (var ctx = db.NewContext())
+        {
+            var stuck = await ctx.WorkflowJobs.FindAsync(job.Id);
+            stuck!.LockedUntil = DateTimeOffset.UtcNow.AddMinutes(-1);
+            await ctx.SaveChangesAsync();
+        }
+
+        var reclaimed = await NewQueue().DequeueAsync("healthy-worker", TimeSpan.FromMinutes(5));
+
+        reclaimed.Should().NotBeNull();
+        reclaimed!.Id.Should().Be(job.Id);
+        reclaimed.LockedBy.Should().Be("healthy-worker");
+        reclaimed.AttemptCount.Should().Be(2);
+    }
+
+    [Fact]
+    public async Task Dequeue_does_not_reclaim_processing_job_with_active_lock()
+    {
+        var job = await NewQueue().EnqueueAsync(Guid.NewGuid(), Payload());
+        await NewQueue().DequeueAsync("busy-worker", TimeSpan.FromMinutes(5));
+
+        // Kilit hala gecerli (gelecekte): is hala calisiyor, geri alinmamali.
+        var result = await NewQueue().DequeueAsync("other-worker", TimeSpan.FromMinutes(5));
+
+        result.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task TryEnqueueOnce_enqueues_first_call_and_skips_duplicate_key()
+    {
+        var workflowId = Guid.NewGuid();
+        const string key = "schedule:wf:Schedule:638000000000000000";
+
+        var first = await NewQueue().TryEnqueueOnceAsync(workflowId, Payload(), key);
+        var second = await NewQueue().TryEnqueueOnceAsync(workflowId, Payload(), key);
+
+        first.Should().BeTrue();
+        second.Should().BeFalse();
+
+        await using var ctx = db.NewContext();
+        var count = ctx.WorkflowJobs.Count(job => job.DedupeKey == key);
+        count.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task TryEnqueueOnce_allows_different_keys()
+    {
+        var workflowId = Guid.NewGuid();
+
+        var a = await NewQueue().TryEnqueueOnceAsync(workflowId, Payload(), "schedule:wf:n:1");
+        var b = await NewQueue().TryEnqueueOnceAsync(workflowId, Payload(), "schedule:wf:n:2");
+
+        a.Should().BeTrue();
+        b.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task Plain_enqueue_leaves_dedupe_key_null_and_allows_many()
+    {
+        // Manuel/webhook enqueue'lar tekillestirilmez: birden cok null DedupeKey serbest olmali.
+        await NewQueue().EnqueueAsync(Guid.NewGuid(), Payload());
+        await NewQueue().EnqueueAsync(Guid.NewGuid(), Payload());
+
+        await using var ctx = db.NewContext();
+        var nullKeyCount = ctx.WorkflowJobs.Count(job => job.DedupeKey == null);
+        nullKeyCount.Should().Be(2);
+    }
+
+    [Fact]
+    public async Task Dequeue_dead_letters_reclaimed_job_when_attempts_exhausted()
+    {
+        var job = await NewQueue().EnqueueAsync(Guid.NewGuid(), Payload());
+
+        // Deneme hakki tukenmis ve kilidi dolmus terk edilmis is: geri alinmak yerine olu mektuba gider.
+        await using (var ctx = db.NewContext())
+        {
+            var stuck = await ctx.WorkflowJobs.FindAsync(job.Id);
+            stuck!.Status = WorkflowJobStatus.Processing;
+            stuck.AttemptCount = stuck.MaxAttempts;
+            stuck.LockedUntil = DateTimeOffset.UtcNow.AddMinutes(-1);
+            await ctx.SaveChangesAsync();
+        }
+
+        var result = await NewQueue().DequeueAsync("worker", TimeSpan.FromMinutes(5));
+
+        result.Should().BeNull();
+
+        await using var verify = db.NewContext();
+        var reloaded = await verify.WorkflowJobs.FindAsync(job.Id);
+        reloaded!.Status.Should().Be(WorkflowJobStatus.DeadLetter);
+    }
 }

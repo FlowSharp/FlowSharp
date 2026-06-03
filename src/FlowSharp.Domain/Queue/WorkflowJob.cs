@@ -23,5 +23,13 @@ public sealed class WorkflowJob : AuditableEntity
 
     public string? LastError { get; set; }
 
+    /// <summary>
+    /// Es zamanli (cok-ornekli) enqueue'larin tekillestirilmesi icin opsiyonel idempotency
+    /// anahtari. Ornegin zamanlanmis tetikleyiciler ayni occurrence icin
+    /// <c>workflowId:node:occurrenceTicks</c> kullanir; unique index sayesinde ayni occurrence
+    /// yalniz bir kez kuyruga girer. Manuel/webhook enqueue'larda null'dir (tekillestirme yok).
+    /// </summary>
+    public string? DedupeKey { get; set; }
+
     public JsonDocument Payload { get; set; } = JsonDocument.Parse("{}");
 }

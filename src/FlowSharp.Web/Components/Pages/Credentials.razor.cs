@@ -30,17 +30,20 @@ public partial class Credentials
     private IEnumerable<CredentialSummary> MineCredentials => items?.Where(c => c.OwnerId == currentUserId) ?? [];
     private IEnumerable<CredentialSummary> OtherCredentials => items?.Where(c => c.OwnerId != currentUserId) ?? [];
 
-    // Sayfa Admin-only (CredentialsManage). Admin tum credential'lari yonetir; bu yuzden
-    // sahiplik kisiti uygulanmaz (ownerId: null). Yeni kayit, olusturan admin'e atanir.
+    // CredentialsManage yetkisi olan herkes erisir. Admin tum credential'lari yonetir (ownerId: null);
+    // Editor/Member yalniz kendi kayitlarini gorur/yonetir (owner-scope). Yeni kayit olusturan kullaniciya atanir.
     protected override async Task OnInitializedAsync()
     {
         (currentUserId, isAdmin) = await FlowSharp.Web.Security.CurrentUser.ResolveAsync(AuthenticationStateProvider);
         await ReloadAsync();
     }
 
+    /// <summary>Admin ise kisit yok (null), degilse yalniz kendi sahipligi.</summary>
+    private string? ScopeOwnerId => isAdmin ? null : currentUserId;
+
     private async Task ReloadAsync()
     {
-        items = await CredentialStore.ListAsync(ownerId: null);
+        items = await CredentialStore.ListAsync(ScopeOwnerId);
 
         var ownerIds = items.Where(c => c.OwnerId != null).Select(c => c.OwnerId!).Distinct().ToList();
         ownerEmails = await DbContext.Users
@@ -63,7 +66,7 @@ public partial class Credentials
 
     private async Task EditAsync(Guid id)
     {
-        var detail = await CredentialStore.GetAsync(id, ownerId: null);
+        var detail = await CredentialStore.GetAsync(id, ScopeOwnerId);
         if (detail is null) return;
         form = new CredentialForm { Id = detail.Id, Name = detail.Name, Type = detail.Type };
         fields.Clear();
@@ -99,7 +102,7 @@ public partial class Credentials
             return;
         }
 
-        await CredentialStore.DeleteAsync(id, ownerId: null);
+        await CredentialStore.DeleteAsync(id, ScopeOwnerId);
         await ReloadAsync();
         Notifier.Success(L["credentials.msg.deleted"]);
     }

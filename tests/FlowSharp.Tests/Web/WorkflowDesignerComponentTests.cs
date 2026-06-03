@@ -27,7 +27,7 @@ namespace FlowSharp.Tests.Web;
 public class WorkflowDesignerComponentTests : IDisposable
 {
     private readonly SqliteDbFixture db = new();
-    private readonly TestContext ctx = new();
+    private readonly BunitContext ctx = new();
 
     public WorkflowDesignerComponentTests()
     {
@@ -51,6 +51,7 @@ public class WorkflowDesignerComponentTests : IDisposable
         ctx.Services.AddSingleton(Substitute.For<IWorkflowQueue>());
         ctx.Services.AddSingleton(Substitute.For<IWorkflowExecutionEngine>());
         ctx.Services.AddSingleton(Substitute.For<IWebhookRegistrar>());
+        ctx.Services.AddSingleton(Substitute.For<FlowSharp.Web.Services.IUiNotifier>());
         ctx.Services.AddSingleton(Substitute.For<IWorkflowExecutionTracker>());
         ctx.Services.AddSingleton(Substitute.For<IWorkflowEventPublisher>());
         ctx.Services.AddSingleton<IExpressionEvaluator>(new ExpressionEvaluator());
@@ -75,7 +76,7 @@ public class WorkflowDesignerComponentTests : IDisposable
     [Fact]
     public void Empty_designer_renders_toolbar_with_default_name()
     {
-        var cut = ctx.RenderComponent<WorkflowDesigner>();
+        var cut = ctx.Render<WorkflowDesigner>();
 
         var nameInput = cut.Find("input.name-input");
         nameInput.GetAttribute("value").Should().Be("New workflow");
@@ -84,7 +85,7 @@ public class WorkflowDesignerComponentTests : IDisposable
     [Fact]
     public void Run_button_is_disabled_when_no_nodes()
     {
-        var cut = ctx.RenderComponent<WorkflowDesigner>();
+        var cut = ctx.Render<WorkflowDesigner>();
 
         var runButton = cut.FindAll("button").First(b => b.TextContent.Contains("common.run"));
         runButton.HasAttribute("disabled").Should().BeTrue();
@@ -93,7 +94,7 @@ public class WorkflowDesignerComponentTests : IDisposable
     [Fact]
     public void Editable_designer_shows_save_button_and_no_history_banner()
     {
-        var cut = ctx.RenderComponent<WorkflowDesigner>();
+        var cut = ctx.Render<WorkflowDesigner>();
 
         cut.FindAll("button").Should().Contain(b => b.TextContent.Contains("common.save"));
         cut.FindAll(".execution-banner").Should().BeEmpty();
@@ -102,7 +103,7 @@ public class WorkflowDesignerComponentTests : IDisposable
     [Fact]
     public void ReadOnly_designer_shows_history_banner_and_hides_run_save()
     {
-        var cut = ctx.RenderComponent<WorkflowDesigner>(parameters => parameters
+        var cut = ctx.Render<WorkflowDesigner>(parameters => parameters
             .Add(p => p.ExecutionId, Guid.NewGuid()));
 
         cut.FindAll(".execution-banner").Should().ContainSingle();
@@ -112,7 +113,7 @@ public class WorkflowDesignerComponentTests : IDisposable
     [Fact]
     public void Designer_root_has_readonly_css_class_in_execution_mode()
     {
-        var cut = ctx.RenderComponent<WorkflowDesigner>(parameters => parameters
+        var cut = ctx.Render<WorkflowDesigner>(parameters => parameters
             .Add(p => p.ExecutionId, Guid.NewGuid()));
 
         cut.Find(".nwf-designer").ClassList.Should().Contain("readonly-exec");

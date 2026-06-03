@@ -77,9 +77,17 @@ public sealed class SchedulerService(
 
                 if (now >= next)
                 {
+                    var occurrence = next;
                     var payload = JsonDocument.Parse($$"""{"source":"trigger","node":"{{nodeName}}","firedAt":"{{now:O}}"}""");
-                    await queue.EnqueueAsync(workflow.Id, payload, cancellationToken);
-                    logger.LogInformation("Schedule tetiklendi: workflow {WorkflowId}, node {Node}.", workflow.Id, nodeName);
+                    // Idempotency anahtari occurrence zamanini icerir: cok-ornekli dagitimda ayni
+                    // tetikleme yalniz tek bir ornek tarafindan kuyruga eklenir (digerleri false alir).
+                    var dedupeKey = $"schedule:{workflow.Id}:{nodeName}:{occurrence.Ticks}";
+                    var enqueued = await queue.TryEnqueueOnceAsync(workflow.Id, payload, dedupeKey, cancellationToken);
+                    if (enqueued)
+                    {
+                        logger.LogInformation("Schedule tetiklendi: workflow {WorkflowId}, node {Node}.", workflow.Id, nodeName);
+                    }
+
                     nextRuns[key] = expression.GetNextOccurrence(now) ?? DateTime.MaxValue;
                 }
             }

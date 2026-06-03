@@ -2,7 +2,10 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Microsoft.EntityFrameworkCore;
+using FlowSharp.Application.Abstractions;
 using FlowSharp.Domain.Security;
+using FlowSharp.Infrastructure.Data;
 
 namespace FlowSharp.Infrastructure.Identity;
 
@@ -24,8 +27,10 @@ public static class IdentitySeeder
     private static readonly Dictionary<string, string[]> RolePermissions = new()
     {
         [AdminRole] = AppPermissions.All,
-        [EditorRole] = [AppPermissions.WorkflowsRead, AppPermissions.WorkflowsWrite, AppPermissions.WorkflowsExecute, AppPermissions.ExecutionsRead],
-        [MemberRole] = [AppPermissions.WorkflowsRead, AppPermissions.WorkflowsWrite, AppPermissions.WorkflowsExecute, AppPermissions.ExecutionsRead],
+        // Editor ve Member: kendi workflow'larini ve kendi credential'larini yonetir
+        // (credentials.manage non-admin'de owner-scope'tur; sayfa/store yalniz kendi kayitlarini gosterir).
+        [EditorRole] = [AppPermissions.WorkflowsRead, AppPermissions.WorkflowsWrite, AppPermissions.WorkflowsExecute, AppPermissions.ExecutionsRead, AppPermissions.CredentialsManage],
+        [MemberRole] = [AppPermissions.WorkflowsRead, AppPermissions.WorkflowsWrite, AppPermissions.WorkflowsExecute, AppPermissions.ExecutionsRead, AppPermissions.CredentialsManage],
         [ViewerRole] = [AppPermissions.WorkflowsRead, AppPermissions.ExecutionsRead]
     };
 
@@ -75,5 +80,57 @@ public static class IdentitySeeder
                 logger.LogWarning("Admin kullanicisi olusturulamadi: {Errors}", string.Join("; ", result.Errors.Select(e => e.Description)));
             }
         }
+
+        // Aktif webhook registration'larina workflow'a ozel key atamak icin yeniden senkronla
+        // (key'i olmayan/eski kayitlar boylece otomatik anahtar kazanir; yeniden kaydetme gerekmez).
+        await BackfillWebhookRegistrationsAsync(sp, logger);
+    }
+
+    private static async Task BackfillWebhookRegistrationsAsync(IServiceProvider sp, ILogger logger)
+    {
+        var dbContext = sp.GetRequiredService<ApplicationDbContext>();
+        var registrar = sp.GetRequiredService<IWebhookRegistrar>();
+
+        var activeWebhookWorkflows = await dbContext.Workflows
+            .AsNoTracking()
+            .Where(workflow => workflow.IsActive)
+            .Select(workflow => new { workflow.Id, workflow.Definition })
+            .ToListAsync();
+
+        var count = 0;
+        foreach (var workflow in activeWebhookWorkflows)
+        {
+            if (!ContainsWebhookTrigger(workflow.Definition.RootElement))
+            {
+                continue;
+            }
+
+            await registrar.SyncAsync(workflow.Id, workflow.Definition.RootElement, isActive: true);
+            count++;
+        }
+
+        if (count > 0)
+        {
+            logger.LogInformation("{Count} aktif webhook workflow kaydi workflow-key semasina senkronlandi.", count);
+        }
+    }
+
+    private static bool ContainsWebhookTrigger(System.Text.Json.JsonElement definition)
+    {
+        if (!definition.TryGetProperty("nodes", out var nodes) || nodes.ValueKind != System.Text.Json.JsonValueKind.Array)
+        {
+            return false;
+        }
+
+        foreach (var node in nodes.EnumerateArray())
+        {
+            if (node.TryGetProperty("type", out var type) &&
+                string.Equals(type.GetString(), "webhook.trigger", StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 }
