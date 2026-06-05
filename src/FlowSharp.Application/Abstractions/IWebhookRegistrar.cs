@@ -15,4 +15,8 @@ public interface IWebhookRegistrar
     Task<WebhookMatch?> ResolveAsync(string? workflowKey, string method, string path, CancellationToken cancellationToken = default);
 }
 
-public sealed record WebhookMatch(Guid WorkflowId, string NodeName);
+/// <summary>
+/// Eslesen webhook kaydi. <paramref name="EventFilter"/> yalniz whatsapp.trigger icin doludur
+/// (messages | statuses | all) ve hangi gelen olaylarin workflow'u tetikleyecegini belirler.
+/// </summary>
+public sealed record WebhookMatch(Guid WorkflowId, string NodeName, string? EventFilter = null);

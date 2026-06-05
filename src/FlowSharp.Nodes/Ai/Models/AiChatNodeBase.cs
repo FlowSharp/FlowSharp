@@ -1,5 +1,6 @@
 using System.Text.Json.Nodes;
 using Microsoft.SemanticKernel;
+using Microsoft.SemanticKernel.ChatCompletion;
 using FlowSharp.Application.Credentials;
 using FlowSharp.Application.Nodes;
 using FlowSharp.Domain.Credentials;
@@ -21,9 +22,15 @@ public abstract class AiChatNodeBase : PerItemNodeType, IProvidesCredentials
     public virtual IEnumerable<CredentialSchema> CredentialSchemas =>
         [new CredentialSchema(CredentialType, Provider, CredentialFields.ApiKey())];
 
+    // Opsiyonel sistem talimati (modelin rolu). Sohbet API'sinde "system" rolu olarak gonderilir.
+    protected static NodeParameterDefinition SystemPromptParam =>
+        new("systemPrompt", "System Prompt", NodeParameterType.Text, IsRequired: false,
+            HelpText: "Opsiyonel: modelin rolu/talimati. Ornek: Sen yardimci bir asistansin.");
+
+    // Kullanici girdisi (sohbet API'sinde "user" rolu). Eski "Prompt" alaninin yerini alir.
     protected static NodeParameterDefinition PromptParam =>
-        new("prompt", "Prompt", NodeParameterType.Text, IsRequired: true,
-            HelpText: "Ornek: Su metni ozetle: {{$json.text}}");
+        new("prompt", "User Input", NodeParameterType.Text, IsRequired: true,
+            HelpText: "Kullanici mesaji. Ornek: {{$json.text}}");
 
     protected static NodeParameterDefinition ModelParam(string defaultModel) =>
         new("model", "Model", NodeParameterType.String, DefaultValue: defaultModel);
@@ -33,8 +40,10 @@ public abstract class AiChatNodeBase : PerItemNodeType, IProvidesCredentials
         var prompt = context.GetString("prompt", index);
         if (string.IsNullOrWhiteSpace(prompt))
         {
-            throw new InvalidOperationException($"{Provider} AI node icin 'prompt' parametresi gerekli.");
+            throw new InvalidOperationException($"{Provider} AI node icin 'prompt' (User Input) parametresi gerekli.");
         }
+
+        var systemPrompt = context.GetString("systemPrompt", index);
 
         var credName = context.GetString("_credential", index);
         if (string.IsNullOrWhiteSpace(credName))
@@ -65,13 +74,23 @@ public abstract class AiChatNodeBase : PerItemNodeType, IProvidesCredentials
         builder.AddChatCompletionForProvider(Provider, modelId, apiKey, endpoint);
 
         var kernel = builder.Build();
-        var result = await kernel.InvokePromptAsync(prompt, cancellationToken: context.CancellationToken);
+
+        // Sohbet API'sini system/user rolleriyle kullan (system opsiyonel).
+        var chat = kernel.GetRequiredService<IChatCompletionService>();
+        var history = new ChatHistory();
+        if (!string.IsNullOrWhiteSpace(systemPrompt))
+        {
+            history.AddSystemMessage(systemPrompt);
+        }
+
+        history.AddUserMessage(prompt);
+        var result = await chat.GetChatMessageContentAsync(history, kernel: kernel, cancellationToken: context.CancellationToken);
 
         return NodeItem.From(new JsonObject
         {
             ["provider"] = Provider,
             ["model"] = modelId,
-            ["text"] = result.ToString()
+            ["text"] = result.Content
         });
     }
 }

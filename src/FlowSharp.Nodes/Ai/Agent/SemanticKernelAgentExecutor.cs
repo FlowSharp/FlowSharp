@@ -11,6 +11,8 @@ using FlowSharp.Application.Nodes;
 using FlowSharp.Application.Nodes.Agents;
 using FlowSharp.Application.Workflows;
 using FlowSharp.Nodes.Ai.Models; // AddChatCompletionForProvider
+using FlowSharp.Nodes.Ai.Tools;  // McpToolNode, McpConnection
+using ModelContextProtocol.Client;
 
 namespace FlowSharp.Nodes.Ai.Agent;
 
@@ -28,6 +30,7 @@ public sealed class SemanticKernelAgentExecutor(
     {
         AgentSubNode? selectedModel = null;
         var modelStartedAt = DateTimeOffset.UtcNow;
+        var mcpClients = new List<McpClient>();
 
         try
         {
@@ -60,6 +63,14 @@ public sealed class SemanticKernelAgentExecutor(
             var toolFunctions = new List<KernelFunction>();
             foreach (var tool in request.Subs.Where(sub => sub.PortType == Domain.Nodes.NodePortType.AiTool))
             {
+                // MCP istemcisi: tek bir sub-node, uzak sunucudan birden cok arac acar.
+                if (tool.Type.Equals(McpToolNode.NodeKey, StringComparison.OrdinalIgnoreCase))
+                {
+                    var mcpFunctions = await AddMcpToolsAsync(request, tool, mcpClients, cancellationToken);
+                    toolFunctions.AddRange(mcpFunctions);
+                    continue;
+                }
+
                 var toolType = registry.Find(tool.Type);
                 if (toolType is null)
                 {
@@ -127,6 +138,20 @@ public sealed class SemanticKernelAgentExecutor(
                 await NotifySubNodeAsync(request, selectedModel, NodeRunStatus.Failed, new JsonObject(), message, modelStartedAt, 0);
             }
             return AgentResult.Fail(message);
+        }
+        finally
+        {
+            foreach (var mcpClient in mcpClients)
+            {
+                try
+                {
+                    await mcpClient.DisposeAsync();
+                }
+                catch (Exception exception)
+                {
+                    logger.LogWarning(exception, "AI Agent '{Name}' MCP istemcisi kapatilamadi.", request.AgentName);
+                }
+            }
         }
     }
 
@@ -316,6 +341,76 @@ public sealed class SemanticKernelAgentExecutor(
         }
 
         return json.ToJsonString();
+    }
+
+    /// <summary>
+    /// Bir MCP istemci alt-node'una baglanir, sundugu araclari (opsiyonel allow-list ile) listeler
+    /// ve her birini bir <see cref="KernelFunction"/>'a cevirir. Acilan istemci <paramref name="mcpClients"/>
+    /// listesine eklenir; cagiran method dispose'dan sorumludur. Baglanti hatasinda agent'i dusurmez,
+    /// node'u atlar ve Failed olarak raporlar.
+    /// </summary>
+    private async Task<IReadOnlyList<KernelFunction>> AddMcpToolsAsync(
+        AgentRequest request,
+        AgentSubNode tool,
+        List<McpClient> mcpClients,
+        CancellationToken cancellationToken)
+    {
+        var startedAt = DateTimeOffset.UtcNow;
+        var context = request.ContextFactory(tool.Type, tool.Name, tool.Parameters, request.Input);
+
+        var serverUrl = context.GetString("serverUrl");
+        if (string.IsNullOrWhiteSpace(serverUrl))
+        {
+            await NotifySubNodeAsync(request, tool, NodeRunStatus.Failed, new JsonObject(), "MCP sunucu URL'i (serverUrl) bos.", startedAt, 0);
+            return [];
+        }
+
+        try
+        {
+            var (token, headerName, headerPrefix) = await McpConnection.ResolveAuthAsync(context);
+            var allowed = McpConnection.ParseAllowedTools(context.GetString("allowedTools"));
+            var httpFactory = context.Services.GetService<IHttpClientFactory>();
+
+            var client = await McpConnection.CreateClientAsync(
+                serverUrl, token, headerName, headerPrefix, httpFactory, cancellationToken);
+            mcpClients.Add(client);
+
+            var mcpTools = await client.ListToolsAsync(cancellationToken: cancellationToken);
+            var functions = new List<KernelFunction>();
+            var names = new JsonArray();
+            foreach (var mcpTool in mcpTools)
+            {
+                if (allowed is not null && !allowed.Contains(mcpTool.Name))
+                {
+                    continue;
+                }
+
+#pragma warning disable SKEXP0001 // AsKernelFunction deneyseldir.
+                functions.Add(mcpTool.AsKernelFunction());
+#pragma warning restore SKEXP0001
+                names.Add(mcpTool.Name);
+            }
+
+            await NotifySubNodeAsync(request, tool, NodeRunStatus.Succeeded, new JsonObject
+            {
+                ["serverUrl"] = serverUrl,
+                ["toolCount"] = functions.Count,
+                ["tools"] = names
+            }, null, startedAt, functions.Count);
+
+            return functions;
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception exception)
+        {
+            logger.LogWarning(exception, "AI Agent '{Name}' MCP node '{Tool}' baglanamadi.", request.AgentName, tool.Name);
+            await NotifySubNodeAsync(request, tool, NodeRunStatus.Failed, new JsonObject(),
+                $"MCP sunucusuna baglanilamadi: {exception.ToUserMessage()}", startedAt, 0);
+            return [];
+        }
     }
 
     private async Task<string> InvokeToolAsync(AgentRequest request, AgentSubNode tool, string query, AgentContextFactory contextFactory)

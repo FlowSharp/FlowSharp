@@ -18,6 +18,7 @@ public sealed class CohereChatNode : AiChatNodeBase
         Parameters:
         [
             new NodeParameterDefinition("_credential", "Credential", NodeParameterType.Credential, IsRequired: true, HelpText: "cohereApi tipli credential seçin."),
+            SystemPromptParam,
             PromptParam,
             ModelParam("command-r-plus")
         ],

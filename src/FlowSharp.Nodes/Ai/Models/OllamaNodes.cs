@@ -25,6 +25,7 @@ public sealed class OllamaChatNode : AiChatNodeBase
         Parameters:
         [
             new NodeParameterDefinition("_credential", "Credential", NodeParameterType.Credential, IsRequired: true, HelpText: "ollamaApi tipli credential seçin."),
+            SystemPromptParam,
             PromptParam,
             ModelParam("llama3.1")
         ],

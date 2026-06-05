@@ -1,0 +1,6 @@
+{
+  "whatsapp.message.displayName": "WhatsApp",
+  "whatsapp.message.description": "Sends a message via the WhatsApp Cloud API (text, template, media, interactive, location, reaction).",
+  "whatsapp.trigger.displayName": "WhatsApp Trigger",
+  "whatsapp.trigger.description": "Starts the workflow on incoming WhatsApp Cloud API messages or status updates."
+}

@@ -18,6 +18,7 @@ public sealed class OpenAiChatNode : AiChatNodeBase
         Parameters:
         [
             new NodeParameterDefinition("_credential", "Credential", NodeParameterType.Credential, IsRequired: true, HelpText: "openAiApi tipli credential seçin."),
+            SystemPromptParam,
             PromptParam,
             ModelParam("gpt-4o-mini")
         ],

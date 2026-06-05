@@ -18,6 +18,7 @@ public sealed class OpenRouterChatNode : AiChatNodeBase
         Parameters:
         [
             new NodeParameterDefinition("_credential", "Credential", NodeParameterType.Credential, IsRequired: true, HelpText: "openRouterApi tipli credential seçin."),
+            SystemPromptParam,
             PromptParam,
             ModelParam("google/gemini-2.5-flash")
         ],

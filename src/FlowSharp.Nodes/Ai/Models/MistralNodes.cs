@@ -18,6 +18,7 @@ public sealed class MistralChatNode : AiChatNodeBase
         Parameters:
         [
             new NodeParameterDefinition("_credential", "Credential", NodeParameterType.Credential, IsRequired: true, HelpText: "mistralApi tipli credential seçin."),
+            SystemPromptParam,
             PromptParam,
             ModelParam("mistral-large-latest")
         ],

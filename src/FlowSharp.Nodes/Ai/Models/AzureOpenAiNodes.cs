@@ -29,6 +29,7 @@ public sealed class AzureOpenAiChatNode : AiChatNodeBase
         Parameters:
         [
             new NodeParameterDefinition("_credential", "Credential", NodeParameterType.Credential, IsRequired: true, HelpText: "azureOpenAiApi tipli credential seçin."),
+            SystemPromptParam,
             PromptParam,
             new NodeParameterDefinition("model", "Deployment Name", NodeParameterType.String, HelpText: "Azure deployment adi (bos birakilirsa credential'daki deploymentName kullanilir).")
         ],

@@ -434,6 +434,55 @@ public partial class WorkflowDesigner : IAsyncDisposable
     private void SetParam(DesignerNode node, string key, string? value) =>
         node.Parameters[key] = value ?? string.Empty;
 
+    /// <summary>
+    /// Bir cikis portunun canvas'ta gosterilecek etiketi. Switch icin etiket statik "Output N"
+    /// yerine kurallardan turetilir: kuraldaki opsiyonel "label", yoksa eslesen "value". Boylece
+    /// kullanici cikislari kural degerleriyle (orn. "delivered") anlamlandirabilir.
+    /// </summary>
+    private string OutputPortLabel(DesignerNode node, NodePort port)
+    {
+        if (!node.NodeKey.Equals("switch.condition", StringComparison.OrdinalIgnoreCase)
+            || !int.TryParse(port.Name, out var portIndex))
+        {
+            return port.Label; // Switch disi node'lar ve Fallback portu: varsayilan etiket.
+        }
+
+        try
+        {
+            var raw = GetParam(node, "rules");
+            if (string.IsNullOrWhiteSpace(raw)
+                || System.Text.Json.Nodes.JsonNode.Parse(raw) is not System.Text.Json.Nodes.JsonArray rules)
+            {
+                return port.Label;
+            }
+
+            foreach (var rule in rules.OfType<System.Text.Json.Nodes.JsonObject>())
+            {
+                var output = rule.TryGetPropertyValue("output", out var o) && o is not null
+                    && int.TryParse(o.ToString(), out var parsed) ? parsed : 0;
+                if (output != portIndex)
+                {
+                    continue;
+                }
+
+                var label = rule.TryGetPropertyValue("label", out var l) ? l?.ToString() : null;
+                if (!string.IsNullOrWhiteSpace(label))
+                {
+                    return label;
+                }
+
+                var value = rule.TryGetPropertyValue("value", out var v) ? v?.ToString() : null;
+                return string.IsNullOrWhiteSpace(value) ? port.Label : value;
+            }
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            // Gecersiz JSON: varsayilan etikete dus.
+        }
+
+        return port.Label;
+    }
+
     /// <summary>Webhook node'unun tam cagri adresi: {base}/webhook/{workflowKey}/{path}.</summary>
     private string WebhookUrl(DesignerNode node)
     {

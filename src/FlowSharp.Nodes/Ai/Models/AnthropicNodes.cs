@@ -18,6 +18,7 @@ public sealed class AnthropicChatNode : AiChatNodeBase
         Parameters:
         [
             new NodeParameterDefinition("_credential", "Credential", NodeParameterType.Credential, IsRequired: true, HelpText: "anthropicApi tipli credential seçin."),
+            SystemPromptParam,
             PromptParam,
             ModelParam("claude-3-5-sonnet-20241022")
         ],

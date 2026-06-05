@@ -18,6 +18,7 @@ public sealed class GroqChatNode : AiChatNodeBase
         Parameters:
         [
             new NodeParameterDefinition("_credential", "Credential", NodeParameterType.Credential, IsRequired: true, HelpText: "groqApi tipli credential seçin."),
+            SystemPromptParam,
             PromptParam,
             ModelParam("llama-3.3-70b-versatile")
         ],

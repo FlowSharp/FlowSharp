@@ -30,7 +30,7 @@ public sealed class SwitchNode : NodeType
                 HelpText: "Ornek: {{$json.type}}"),
             new NodeParameterDefinition("rules", "Rules (JSON)", NodeParameterType.Json,
                 DefaultValue: "[{\"value\":\"a\",\"output\":0},{\"value\":\"b\",\"output\":1}]",
-                HelpText: "Her kural {\"value\":\"...\",\"output\":0-3}. Hicbir kurala uymayan item'lar Fallback cikisina gider.")
+                HelpText: "Her kural {\"value\":\"...\",\"output\":0-3,\"label\":\"opsiyonel cikis adi\"}. 'label' verirsen cikis portu o adla, vermezsen 'value' ile gosterilir. Eslesmeyenler Fallback'e gider.")
         ],
         Tags: ["core", "logic"],
         Icon: "bezier2",

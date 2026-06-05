@@ -18,6 +18,7 @@ public sealed class GoogleGeminiChatNode : AiChatNodeBase
         Parameters:
         [
             new NodeParameterDefinition("_credential", "Credential", NodeParameterType.Credential, IsRequired: true, HelpText: "googleGeminiApi tipli credential seçin."),
+            SystemPromptParam,
             PromptParam,
             ModelParam("gemini-2.5-flash")
         ],

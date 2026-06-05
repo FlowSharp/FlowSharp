@@ -18,6 +18,7 @@ public sealed class HuggingFaceChatNode : AiChatNodeBase
         Parameters:
         [
             new NodeParameterDefinition("_credential", "Credential", NodeParameterType.Credential, IsRequired: true, HelpText: "huggingFaceApi tipli credential seçin."),
+            SystemPromptParam,
             PromptParam,
             ModelParam("meta-llama/Llama-3.3-70B-Instruct")
         ],

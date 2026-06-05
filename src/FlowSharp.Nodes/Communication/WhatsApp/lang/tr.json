@@ -1,0 +1,6 @@
+{
+  "whatsapp.message.displayName": "WhatsApp",
+  "whatsapp.message.description": "WhatsApp Cloud API üzerinden mesaj gönderir (metin, şablon, medya, interaktif, konum, reaction).",
+  "whatsapp.trigger.displayName": "WhatsApp Tetikleyici",
+  "whatsapp.trigger.description": "WhatsApp Cloud API'den gelen mesaj veya durum güncellemelerinde workflow'u başlatır."
+}

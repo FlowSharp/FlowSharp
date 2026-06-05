@@ -176,7 +176,7 @@
                                  style="top:@(PortTop(k, mainOuts.Count))px">
                                 @if (mainOuts.Count > 1)
                                 {
-                                    <span class="nwf-port-label">@mainOuts[k].Port.Label</span>
+                                    <span class="nwf-port-label">@OutputPortLabel(node, mainOuts[k].Port)</span>
                                 }
                             </div>
                         }
@@ -352,11 +352,12 @@
                         <input class="input" value="@openNode.Name" @onchange="e => RenameNode(openNode, e.Value?.ToString())" disabled="@IsReadOnly" />
                     </div>
 
-                    @if (def is not null && def.Key == "webhook.trigger")
+                    @if (def is not null && (def.Key == "webhook.trigger" || def.Key == "whatsapp.trigger"))
                     {
                         var webhookUrlReady = workflow is not null;
+                        var isWhatsApp = def.Key == "whatsapp.trigger";
                         <div class="field">
-                            <label>@L["designer.ndv.webhook_url"]</label>
+                            <label>@(isWhatsApp ? "Callback URL" : L["designer.ndv.webhook_url"])</label>
                             <div style="display:flex; gap:8px; align-items:center">
                                 <input class="input" readonly value="@WebhookUrl(openNode)" style="font-family:'JetBrains Mono',Consolas,monospace; font-size:12px" />
                                 <button class="btn btn-ghost btn-sm" title="Kopyala" @onclick="() => CopyAsync(WebhookUrl(openNode))">📋</button>
@@ -365,7 +366,14 @@
                             {
                                 <div class="expr-hint expr-err">@L["designer.ndv.webhook_save_first"]</div>
                             }
-                            <div class="hint">Bu adrese @(GetParam(openNode, "method") is { Length: > 0 } m ? m : "POST") istegi gelince workflow tetiklenir.</div>
+                            @if (isWhatsApp)
+                            {
+                                <div class="hint">Meta panelinde WhatsApp webhook'una bu URL'i Callback URL, yukarıdaki Verify Token'ı da doğrulama anahtarı olarak girin.</div>
+                            }
+                            else
+                            {
+                                <div class="hint">Bu adrese @(GetParam(openNode, "method") is { Length: > 0 } m ? m : "POST") istegi gelince workflow tetiklenir.</div>
+                            }
                         </div>
                     }
 

@@ -42,7 +42,28 @@ public static class WebhookEndpoints
             return;
         }
 
+        // WhatsApp/Meta webhook dogrulama el sikismasi: GET ?hub.mode=subscribe&hub.challenge=...
+        // Workflow calistirilmadan challenge text/plain olarak geri yazilir.
+        if (HttpMethods.IsGet(request.Method) &&
+            string.Equals(request.Query["hub.mode"], "subscribe", StringComparison.OrdinalIgnoreCase) &&
+            request.Query.TryGetValue("hub.challenge", out var challenge))
+        {
+            response.StatusCode = StatusCodes.Status200OK;
+            response.ContentType = "text/plain";
+            await response.WriteAsync(challenge.ToString(), Encoding.UTF8, cancellationToken);
+            return;
+        }
+
         var payload = await BuildPayloadAsync(path, match.NodeName, request, cancellationToken);
+
+        // WhatsApp olay filtresi: send node'unun urettigi sent/delivered/read durum webhook'lari
+        // workflow'u (ve AI'i) yeniden tetiklemesin. Filtreye uymayan olay sessizce 200 ile yanitlanir
+        // (Meta'nin webhook'u devre disi birakmamasi icin 2xx donmek gerekir).
+        if (!WhatsAppWebhookPayload.ShouldTrigger(payload.RootElement, match.EventFilter))
+        {
+            await WriteJsonAsync(response, StatusCodes.Status200OK, new JsonObject { ["ignored"] = true }, cancellationToken);
+            return;
+        }
 
         WorkflowRunResult result;
         try
@@ -183,6 +204,14 @@ public static class WebhookEndpoints
             ["headers"] = headers,
             ["body"] = body
         };
+
+        // Gelen govde bir WhatsApp Cloud API olayi ise: normalize edilmis mesaj/durum alanlarini ekle.
+        // Ham payload ["body"] altinda korunur (normalize + raw).
+        if (WhatsAppWebhookPayload.TryNormalize(body, out var whatsapp))
+        {
+            root["source"] = "whatsapp";
+            root["whatsapp"] = whatsapp;
+        }
 
         return JsonDocument.Parse(root.ToJsonString());
     }
