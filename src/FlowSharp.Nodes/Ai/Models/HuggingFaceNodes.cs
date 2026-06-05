@@ -49,7 +49,7 @@ public sealed class HuggingFaceChatModelNode : NodeType
         Color: "#eab308",
         IsAiPowered: true,
         Credentials: ["huggingFaceApi"],
-        SubCategory: "AI Models",
+        SubCategory: "AI Agents Model",
         Inputs: [],
         Outputs: [new NodePort("model", "Model", NodePortType.AiModel)]
     );

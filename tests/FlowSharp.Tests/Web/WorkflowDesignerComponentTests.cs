@@ -48,6 +48,8 @@ public class WorkflowDesignerComponentTests : IDisposable
         ctx.Services.AddSingleton(catalog);
         ctx.Services.AddSingleton(credStore);
         ctx.Services.AddSingleton(credCatalog);
+        ctx.Services.AddSingleton(Substitute.For<IWorkflowService>());
+        ctx.Services.AddSingleton(Substitute.For<IExecutionService>());
         ctx.Services.AddSingleton(Substitute.For<IWorkflowQueue>());
         ctx.Services.AddSingleton(Substitute.For<IWorkflowExecutionEngine>());
         ctx.Services.AddSingleton(Substitute.For<IWebhookRegistrar>());

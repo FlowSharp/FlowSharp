@@ -28,7 +28,9 @@ public class WorkflowRunnerTests : IDisposable
         return new WorkflowRunner(
             ctx, engine, events, queue,
             Substitute.For<IWorkflowRunRateLimiter>(),
+            Substitute.For<IBlobStore>(),
             Options.Create(new ExecutionOptions()),
+            Options.Create(new BlobStorageOptions()),
             Microsoft.Extensions.Logging.Abstractions.NullLogger<WorkflowRunner>.Instance);
     }
 

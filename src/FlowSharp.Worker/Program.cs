@@ -1,5 +1,6 @@
 using FlowSharp.Infrastructure;
 using FlowSharp.Infrastructure.Data;
+using FlowSharp.Infrastructure.Observability;
 using FlowSharp.Infrastructure.Queue;
 using Serilog;
 
@@ -13,6 +14,7 @@ builder.Services.AddSerilog((services, configuration) => configuration
     .WriteTo.File("logs/worker-.log", rollingInterval: RollingInterval.Day));
 
 builder.Services.AddInfrastructure(builder.Configuration);
+builder.Services.AddObservability(builder.Configuration, "flowsharp-worker");
 builder.Services.AddWorkflowScheduler();
 builder.Services.AddHostedService<QueueWorkerService>();
 

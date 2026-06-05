@@ -1,0 +1,51 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: flowsharp-worker
+  namespace: flowsharp
+  labels:
+    app: flowsharp-worker
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: flowsharp-worker
+  template:
+    metadata:
+      labels:
+        app: flowsharp-worker
+    spec:
+      containers:
+        - name: worker
+          # Dockerfile'in "worker" target'indan uretilen imaj.
+          image: your-registry/flowsharp-worker:latest
+          envFrom:
+            - configMapRef:
+                name: flowsharp-config
+          env:
+            - name: DOTNET_ENVIRONMENT
+              value: Production
+            # Worker migration uygulamaz (web yapar); olasi yarisi onler.
+            - name: Database__ApplyMigrationsOnStartup
+              value: "false"
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: flowsharp-secrets
+                  key: PostgresPassword
+            - name: Security__CredentialEncryptionKey
+              valueFrom:
+                secretKeyRef:
+                  name: flowsharp-secrets
+                  key: CredentialEncryptionKey
+            - name: ConnectionStrings__DefaultConnection
+              value: "Host=pgbouncer;Port=5432;Database=flowsharp_db;Username=postgres;Password=$(POSTGRES_PASSWORD);No Reset On Close=true;Max Auto Prepare=0"
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "256Mi"
+            limits:
+              cpu: "1"
+              memory: "512Mi"
+      # Olceklenirken/dururken calisan isin bitmesine pay birak (kilit suresi 15 dk).
+      terminationGracePeriodSeconds: 60

@@ -1,0 +1,103 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: flowsharp-web
+  namespace: flowsharp
+  labels:
+    app: flowsharp-web
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: flowsharp-web
+  template:
+    metadata:
+      labels:
+        app: flowsharp-web
+    spec:
+      containers:
+        - name: web
+          # Dockerfile'in "web" target'indan uretilen imaj. Kendi registry'nizle degistirin.
+          image: your-registry/flowsharp-web:latest
+          ports:
+            - containerPort: 8080
+          envFrom:
+            - configMapRef:
+                name: flowsharp-config
+          env:
+            - name: ASPNETCORE_ENVIRONMENT
+              value: Production
+            - name: ASPNETCORE_HTTP_PORTS
+              value: "8080"
+            # Sema migration'lari web tarafindan uygulanir (worker'da kapali). Ilk dagitimda
+            # yaris olmamasi icin README'deki migration Job onerisine bakin.
+            - name: Database__ApplyMigrationsOnStartup
+              value: "true"
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: flowsharp-secrets
+                  key: PostgresPassword
+            - name: Security__CredentialEncryptionKey
+              valueFrom:
+                secretKeyRef:
+                  name: flowsharp-secrets
+                  key: CredentialEncryptionKey
+            # PgBouncer uzerinden Postgres. Transaction modunda prepared statement kapatilir.
+            - name: ConnectionStrings__DefaultConnection
+              value: "Host=pgbouncer;Port=5432;Database=flowsharp_db;Username=postgres;Password=$(POSTGRES_PASSWORD);No Reset On Close=true;Max Auto Prepare=0"
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "256Mi"
+            limits:
+              cpu: "1"
+              memory: "512Mi"
+          # Anonim, minimal probe uc noktalari (Faz 1). Detayli /health admin'e kapali.
+          livenessProbe:
+            httpGet:
+              path: /health/live
+              port: 8080
+            initialDelaySeconds: 15
+            periodSeconds: 20
+          readinessProbe:
+            httpGet:
+              path: /health/ready
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: flowsharp-web
+  namespace: flowsharp
+spec:
+  selector:
+    app: flowsharp-web
+  ports:
+    - port: 80
+      targetPort: 8080
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: flowsharp-web
+  namespace: flowsharp
+  annotations:
+    # Blazor Server SignalR (WebSocket) icin uzun zaman asimi. nginx-ingress ornegi.
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: flowsharp.example.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: flowsharp-web
+                port:
+                  number: 80

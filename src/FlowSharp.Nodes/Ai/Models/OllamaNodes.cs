@@ -56,7 +56,7 @@ public sealed class OllamaChatModelNode : NodeType
         Color: "#6b7280",
         IsAiPowered: true,
         Credentials: ["ollamaApi"],
-        SubCategory: "AI Models",
+        SubCategory: "AI Agents Model",
         Inputs: [],
         Outputs: [new NodePort("model", "Model", NodePortType.AiModel)]
     );

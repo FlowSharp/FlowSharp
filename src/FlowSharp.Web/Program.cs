@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Identity;
 using FlowSharp.Domain.Security;
 using FlowSharp.Infrastructure;
 using FlowSharp.Infrastructure.Data;
+using FlowSharp.Infrastructure.Observability;
 using FlowSharp.Infrastructure.Identity;
 using FlowSharp.Web.Components;
 using FlowSharp.Web.Components.Account;
@@ -64,6 +65,7 @@ builder.Services.AddAuthorization(options =>
 });
 
 builder.Services.AddInfrastructure(builder.Configuration);
+builder.Services.AddObservability(builder.Configuration, "flowsharp-web");
 builder.Services.AddDatabaseDeveloperPageExceptionFilter();
 
 // Health check'ler: readiness DB baglantisini dogrular (k8s/LB probe + admin detayli rapor).

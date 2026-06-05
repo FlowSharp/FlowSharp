@@ -96,6 +96,10 @@ public static class DependencyInjection
         services.Configure<Application.Workflows.RateLimitOptions>(
             configuration.GetSection(Application.Workflows.RateLimitOptions.SectionName));
         services.AddSingleton<IWorkflowRunRateLimiter, WorkflowRunRateLimiter>();
+        // Buyuk execution ciktilarini DB disina tasima (offload). Varsayilan: dosya sistemi.
+        services.Configure<Application.Workflows.BlobStorageOptions>(
+            configuration.GetSection(Application.Workflows.BlobStorageOptions.SectionName));
+        services.AddSingleton<IBlobStore, Storage.FileSystemBlobStore>();
         services.AddScoped<Application.Workflows.IWorkflowService, WorkflowService>();
         services.AddScoped<Application.Workflows.IExecutionService, ExecutionService>();
         services.AddScoped<Application.Workflows.IDashboardService, DashboardService>();

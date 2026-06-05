@@ -49,7 +49,7 @@ public sealed class AnthropicChatModelNode : NodeType
         Color: "#d97706",
         IsAiPowered: true,
         Credentials: ["anthropicApi"],
-        SubCategory: "AI Models",
+        SubCategory: "AI Agents Model",
         Inputs: [],
         Outputs: [new NodePort("model", "Model", NodePortType.AiModel)]
     );

@@ -49,7 +49,7 @@ public sealed class OpenRouterChatModelNode : NodeType
         Color: "#7c3aed",
         IsAiPowered: true,
         Credentials: ["openRouterApi"],
-        SubCategory: "AI Models",
+        SubCategory: "AI Agents Model",
         Inputs: [],
         Outputs: [new NodePort("model", "Model", NodePortType.AiModel)]
     );

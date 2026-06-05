@@ -1,0 +1,24 @@
+# Web HPA: CPU kullanimina gore yatay olcekleme. Blazor Server bellek/CPU yogun oldugundan
+# CPU uygun bir sinyaldir. (HPA'nin calismasi icin pod'larda CPU "requests" tanimli olmali.)
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: flowsharp-web
+  namespace: flowsharp
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: flowsharp-web
+  minReplicas: 2
+  maxReplicas: 10
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 300

@@ -12,6 +12,28 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
 
+  # PgBouncer: Postgres baglanti havuzlayici. Cok sayida web/worker ornegi az sayida gercek
+  # DB baglantisini paylasir (connection storm onleme). Transaction pooling modu.
+  # Host portu 6432 -> container 5432.
+  pgbouncer:
+    image: edoburu/pgbouncer:latest
+    container_name: flowsharp-pgbouncer
+    restart: unless-stopped
+    ports:
+      - "6432:5432"
+    environment:
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      DB_NAME: flowsharp_db
+      AUTH_TYPE: scram-sha-256
+      POOL_MODE: transaction
+      MAX_CLIENT_CONN: "1000"
+      DEFAULT_POOL_SIZE: "25"
+    depends_on:
+      - postgres
+
   redis:
     image: redis:7-alpine
     container_name: flowsharp-redis
@@ -29,6 +51,11 @@ services:
       target: web
     ports:
       - "8080:8080"
+    # PgBouncer uzerinden Postgres'e gecmek icin asagidaki Database__Provider ve
+    # ConnectionStrings__DefaultConnection degerlerini su sekilde degistirin:
+    #   Database__Provider=Postgres
+    #   ConnectionStrings__DefaultConnection=Host=pgbouncer;Port=5432;Database=flowsharp_db;Username=postgres;Password=postgres;No Reset On Close=true;Max Auto Prepare=0
+    # (Transaction modunda sunucu-tarafi prepared statement desteklenmez; ustteki ayarlar onu kapatir.)
     environment:
       - ASPNETCORE_ENVIRONMENT=Production
       - ASPNETCORE_HTTP_PORTS=8080
@@ -54,11 +81,13 @@ services:
       context: .
       dockerfile: Dockerfile
       target: worker
+    # PgBouncer uzerinden Postgres icin web servisindeki ayni notlara bakin.
     environment:
       - ASPNETCORE_ENVIRONMENT=Production
       - Database__Provider=Sqlite
       - ConnectionStrings__DefaultConnection=Data Source=/app/App_Data/flowsharp.db
       - Redis__ConnectionString=redis:6379
+      - Worker__MaxConcurrency=5
       - Security__CredentialEncryptionKey=TXlTdXBlclNlY3JldEVuY3J5cHRpb25LZXkxMjM0NTY=
     volumes:
       - flowsharp_logs:/app/logs

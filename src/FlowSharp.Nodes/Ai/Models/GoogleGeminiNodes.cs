@@ -49,7 +49,7 @@ public sealed class GoogleGeminiChatModelNode : NodeType
         Color: "#4285f4",
         IsAiPowered: true,
         Credentials: ["googleGeminiApi"],
-        SubCategory: "AI Models",
+        SubCategory: "AI Agents Model",
         Inputs: [],
         Outputs: [new NodePort("model", "Model", NodePortType.AiModel)]
     );

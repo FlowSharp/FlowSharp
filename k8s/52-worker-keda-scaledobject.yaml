@@ -1,0 +1,50 @@
+# Worker olcekleme - KUYRUK DERINLIGI tabanli (ONERILEN, KEDA gerektirir).
+#
+# KEDA kurulu olmali: https://keda.sh  (kubectl apply -f https://github.com/kedacore/keda/releases/...)
+# Bu dosyayi kullaniyorsaniz 51-worker-hpa.yaml'i UYGULAMAYIN; KEDA kendi HPA'sini olusturur ve
+# ayni Deployment'i iki autoscaler yonetmemelidir.
+#
+# Mantik: kuyrukta calismaya hazir (Pending + AvailableAt gecmis) is sayisina gore olcekler.
+# desiredReplicas = ceil(bekleyen_is / targetQueryValue). AI/LLM gibi I/O-bound islerde CPU
+# dusuk kalsa bile kuyruk birikince olcekleme tetiklenir.
+apiVersion: keda.sh/v1alpha1
+kind: TriggerAuthentication
+metadata:
+  name: flowsharp-pg-auth
+  namespace: flowsharp
+spec:
+  secretTargetRef:
+    - parameter: password
+      name: flowsharp-secrets
+      key: PostgresPassword
+---
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: flowsharp-worker
+  namespace: flowsharp
+spec:
+  scaleTargetRef:
+    name: flowsharp-worker
+  minReplicaCount: 1
+  maxReplicaCount: 20
+  cooldownPeriod: 300
+  pollingInterval: 15
+  triggers:
+    - type: postgresql
+      metadata:
+        host: pgbouncer
+        port: "5432"
+        userName: postgres
+        dbName: flowsharp_db
+        sslmode: disable
+        # Hazir bekleyen is sayisi. "Status" 0 = Pending (PascalCase kolon, tirnak sart).
+        query: >-
+          SELECT count(*) FROM workflow_jobs
+          WHERE "Status" = 0 AND "AvailableAt" <= now()
+        # Replica basina hedeflenen bekleyen is. 200 bekleyen / 20 = ~10 replica.
+        targetQueryValue: "20"
+        # 1'in altinda (hic is yok) olceklemeyi durdurur.
+        activationTargetQueryValue: "1"
+      authenticationRef:
+        name: flowsharp-pg-auth

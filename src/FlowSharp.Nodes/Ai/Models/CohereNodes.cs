@@ -49,7 +49,7 @@ public sealed class CohereChatModelNode : NodeType
         Color: "#8b5cf6",
         IsAiPowered: true,
         Credentials: ["cohereApi"],
-        SubCategory: "AI Models",
+        SubCategory: "AI Agents Model",
         Inputs: [],
         Outputs: [new NodePort("model", "Model", NodePortType.AiModel)]
     );

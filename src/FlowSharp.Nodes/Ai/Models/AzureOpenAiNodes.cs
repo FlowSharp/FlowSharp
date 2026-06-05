@@ -60,7 +60,7 @@ public sealed class AzureOpenAiChatModelNode : NodeType
         Color: "#0078d4",
         IsAiPowered: true,
         Credentials: ["azureOpenAiApi"],
-        SubCategory: "AI Models",
+        SubCategory: "AI Agents Model",
         Inputs: [],
         Outputs: [new NodePort("model", "Model", NodePortType.AiModel)]
     );

@@ -1,0 +1,27 @@
+# Worker HPA (CPU tabanli) - VARSAYILAN/BASIT secenek.
+# Kutu disinda calisir, ek bilesen gerektirmez. Ancak CPU, kuyruk birikmesini gec yansitir
+# (orn. cogu is I/O-bound AI/LLM cagrilariysa CPU dusuk kalir ama kuyruk buyur).
+# Kuyruk derinligine gore daha dogru olcekleme icin 52-worker-keda-scaledobject.yaml'a bakin
+# (KEDA kuruluysa bu dosyayi UYGULAMAYIN; ikisi ayni Deployment'i yonetmemeli).
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: flowsharp-worker
+  namespace: flowsharp
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: flowsharp-worker
+  minReplicas: 2
+  maxReplicas: 15
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 300

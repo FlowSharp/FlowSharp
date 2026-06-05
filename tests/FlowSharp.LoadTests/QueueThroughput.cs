@@ -91,8 +91,9 @@ internal static class QueueThroughput
         await using var db = new ApplicationDbContext(options);
         var queue = new SqliteWorkflowQueue(db);
         var runner = new WorkflowRunner(
-            db, engine, new NoopEventPublisher(), queue, new NoopRunRateLimiter(),
+            db, engine, new NoopEventPublisher(), queue, new NoopRunRateLimiter(), new NoopBlobStore(),
             Options.Create(new ExecutionOptions { SaveData = "None" }),
+            Options.Create(new BlobStorageOptions()),
             NullLogger<WorkflowRunner>.Instance);
 
         await runner.ExecuteNowAsync(workflowId, JsonDocument.Parse("""{"source":"manual"}"""));
@@ -139,6 +140,13 @@ internal static class QueueThroughput
     private sealed class NoopRunRateLimiter : IWorkflowRunRateLimiter
     {
         public Task EnsureWithinLimitAsync(string? ownerId, CancellationToken cancellationToken = default) => Task.CompletedTask;
+    }
+
+    private sealed class NoopBlobStore : IBlobStore
+    {
+        public Task<string> SaveAsync(string content, CancellationToken cancellationToken = default) => Task.FromResult(string.Empty);
+        public Task<string?> GetAsync(string reference, CancellationToken cancellationToken = default) => Task.FromResult<string?>(null);
+        public Task DeleteAsync(string reference, CancellationToken cancellationToken = default) => Task.CompletedTask;
     }
 
     private sealed class NoopAgent : IAgentExecutor

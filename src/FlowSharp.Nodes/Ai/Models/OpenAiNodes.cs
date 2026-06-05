@@ -49,7 +49,7 @@ public sealed class OpenAiChatModelNode : NodeType
         Color: "#10a37f",
         IsAiPowered: true,
         Credentials: ["openAiApi"],
-        SubCategory: "AI Models",
+        SubCategory: "AI Agents Model",
         Inputs: [],
         Outputs: [new NodePort("model", "Model", NodePortType.AiModel)]
     );

@@ -49,7 +49,7 @@ public sealed class GroqChatModelNode : NodeType
         Color: "#f55036",
         IsAiPowered: true,
         Credentials: ["groqApi"],
-        SubCategory: "AI Models",
+        SubCategory: "AI Agents Model",
         Inputs: [],
         Outputs: [new NodePort("model", "Model", NodePortType.AiModel)]
     );

@@ -49,7 +49,7 @@ public sealed class MistralChatModelNode : NodeType
         Color: "#f472b6",
         IsAiPowered: true,
         Credentials: ["mistralApi"],
-        SubCategory: "AI Models",
+        SubCategory: "AI Agents Model",
         Inputs: [],
         Outputs: [new NodePort("model", "Model", NodePortType.AiModel)]
     );

@@ -1,9 +1,12 @@
+using System.Diagnostics;
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using FlowSharp.Application.Abstractions;
+using FlowSharp.Application.Diagnostics;
 using FlowSharp.Application.Errors;
 using FlowSharp.Application.Workflows;
 using FlowSharp.Domain.Queue;
@@ -22,10 +25,13 @@ public sealed class WorkflowRunner(
     IWorkflowEventPublisher eventPublisher,
     IWorkflowQueue queue,
     IWorkflowRunRateLimiter rateLimiter,
+    IBlobStore blobStore,
     IOptions<ExecutionOptions> executionOptions,
+    IOptions<BlobStorageOptions> blobOptions,
     ILogger<WorkflowRunner> logger) : IWorkflowRunner
 {
     private readonly ExecutionOptions executionSettings = executionOptions.Value;
+    private readonly BlobStorageOptions blobSettings = blobOptions.Value;
 
     public async Task RunAsync(WorkflowJob job, CancellationToken cancellationToken = default)
     {
@@ -87,6 +93,10 @@ public sealed class WorkflowRunner(
             }
         };
 
+        using var activity = FlowSharpTelemetry.ActivitySource.StartActivity("workflow.execute");
+        activity?.SetTag("workflow.id", workflow.Id);
+        var stopwatch = Stopwatch.StartNew();
+        var statusTag = "failed";
         try
         {
             var result = await engine.ExecuteAsync(
@@ -94,10 +104,11 @@ public sealed class WorkflowRunner(
                 payload.RootElement,
                 options: options,
                 cancellationToken);
+            statusTag = result.Succeeded ? "succeeded" : "failed";
 
             // Agir node ciktilari sadece config izin verirse yazilir (metadata her zaman yazilir).
             var includeData = ShouldSaveData(result.Succeeded);
-            execution.Output = BuildOutputDocument(result, includeData);
+            execution.Output = await OffloadIfLargeAsync(BuildOutputDocument(result, includeData), cancellationToken);
             execution.Status = result.Succeeded ? WorkflowExecutionStatus.Succeeded : WorkflowExecutionStatus.Failed;
             execution.Error = result.Error;
             execution.FinishedAt = DateTimeOffset.UtcNow;
@@ -125,6 +136,14 @@ public sealed class WorkflowRunner(
 
             await TriggerErrorWorkflowsAsync(workflow.Id, execution.Id, message, payload, cancellationToken);
             throw;
+        }
+        finally
+        {
+            stopwatch.Stop();
+            var statusKvp = new KeyValuePair<string, object?>("status", statusTag);
+            FlowSharpTelemetry.WorkflowRuns.Add(1, statusKvp);
+            FlowSharpTelemetry.WorkflowDuration.Record(stopwatch.Elapsed.TotalMilliseconds, statusKvp);
+            activity?.SetTag("workflow.status", statusTag);
         }
     }
 
@@ -231,7 +250,30 @@ public sealed class WorkflowRunner(
             _ => true // "all" (varsayilan)
         };
 
-    /// <summary>Workflow basina sayi/yas limitini asan eski calisma kayitlarini siler.</summary>
+    /// <summary>
+    /// Cikti DB'ye yazilmadan once, offload etkin ve icerik esigi asiyorsa blob deposuna tasinir;
+    /// DB'de yalniz kucuk bir referans isaretcisi kalir. Aksi halde belge oldugu gibi doner.
+    /// </summary>
+    private async Task<JsonDocument> OffloadIfLargeAsync(JsonDocument output, CancellationToken cancellationToken)
+    {
+        if (!blobSettings.Enabled)
+        {
+            return output;
+        }
+
+        var json = output.RootElement.GetRawText();
+        if (Encoding.UTF8.GetByteCount(json) <= blobSettings.ThresholdBytes)
+        {
+            return output;
+        }
+
+        var reference = await blobStore.SaveAsync(json, cancellationToken);
+        logger.LogInformation("Execution ciktisi blob deposuna tasindi ({Bytes} byte, ref {Reference}).",
+            json.Length, reference);
+        return ExecutionOutputBlob.CreateMarker(reference);
+    }
+
+    /// <summary>Workflow basina sayi/yas limitini asan eski calisma kayitlarini (ve offload blob'larini) siler.</summary>
     private async Task PruneExecutionsAsync(Guid workflowId, CancellationToken cancellationToken)
     {
         try
@@ -239,9 +281,11 @@ public sealed class WorkflowRunner(
             if (executionSettings.MaxAgeDays > 0)
             {
                 var cutoff = DateTimeOffset.UtcNow.AddDays(-executionSettings.MaxAgeDays);
-                await dbContext.WorkflowExecutions
-                    .Where(e => e.WorkflowId == workflowId && e.StartedAt < cutoff)
-                    .ExecuteDeleteAsync(cancellationToken);
+                var aged = dbContext.WorkflowExecutions
+                    .Where(e => e.WorkflowId == workflowId && e.StartedAt < cutoff);
+
+                await DeleteOffloadedBlobsAsync(aged, cancellationToken);
+                await aged.ExecuteDeleteAsync(cancellationToken);
             }
 
             if (executionSettings.MaxCount > 0)
@@ -252,14 +296,37 @@ public sealed class WorkflowRunner(
                     .Select(e => e.Id)
                     .Take(executionSettings.MaxCount);
 
-                await dbContext.WorkflowExecutions
-                    .Where(e => e.WorkflowId == workflowId && !keepIds.Contains(e.Id))
-                    .ExecuteDeleteAsync(cancellationToken);
+                var excess = dbContext.WorkflowExecutions
+                    .Where(e => e.WorkflowId == workflowId && !keepIds.Contains(e.Id));
+
+                await DeleteOffloadedBlobsAsync(excess, cancellationToken);
+                await excess.ExecuteDeleteAsync(cancellationToken);
             }
         }
         catch (Exception ex)
         {
             logger.LogError(ex, "Execution budama sirasinda hata (workflow {WorkflowId}).", workflowId);
+        }
+    }
+
+    /// <summary>
+    /// Silinecek calismalardan offload edilmis olanlarin blob'larini siler (yetim blob birakmamak icin).
+    /// Offload kapaliyken hicbir ek sorgu yapilmaz; varsayilan budama yolu degismez.
+    /// </summary>
+    private async Task DeleteOffloadedBlobsAsync(IQueryable<WorkflowExecution> toDelete, CancellationToken cancellationToken)
+    {
+        if (!blobSettings.Enabled)
+        {
+            return;
+        }
+
+        var outputs = await toDelete.AsNoTracking().Select(e => e.Output).ToListAsync(cancellationToken);
+        foreach (var output in outputs)
+        {
+            if (ExecutionOutputBlob.TryGetReference(output, out var reference))
+            {
+                await blobStore.DeleteAsync(reference, cancellationToken);
+            }
         }
     }
 }
