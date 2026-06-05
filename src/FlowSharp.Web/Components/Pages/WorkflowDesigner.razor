@@ -53,24 +53,38 @@
                     var color = GetParam(node, "color") is { Length: > 0 } c ? c : "green";
                     var width = GetParam(node, "width") is { Length: > 0 } w ? w : "400";
                     var isCollapsed = GetParam(node, "collapsed") == "true";
-                    var height = isCollapsed ? "52" : (GetParam(node, "height") is { Length: > 0 } h ? h : "250");
+                    var fullHeight = GetParam(node, "height") is { Length: > 0 } h ? h : "250";
+                    var height = isCollapsed ? "52" : fullHeight;
 
-                    <div class="nwf-node nwf-sticky-note @color @(node.InstanceId == selectedId ? "selected" : "")"
-                         id="node-@node.InstanceId" 
+                    <div class="nwf-node nwf-sticky-note @color @(node.InstanceId == selectedId ? "selected" : "") @(colorPickerNodeId == node.InstanceId ? "picking" : "")"
+                         id="node-@node.InstanceId"
+                         data-collapsed="@(isCollapsed ? "true" : "false")"
+                         data-full-h="@fullHeight"
                          style="left:@(node.X)px; top:@(node.Y)px; width:@(width)px; height:@(height)px; min-height: 52px;">
                         <div class="nwf-sticky-head">
                             <input class="nwf-sticky-title-input" value="@title" @oninput='e => SetParam(node, "title", e.Value?.ToString())' disabled="@IsReadOnly" />
                             
                             <div class="nwf-sticky-controls">
-                                <div class="nwf-sticky-colors">
-                                    @foreach (var col in new[] { "green", "blue", "yellow", "red", "purple" })
+                                <div class="nwf-sticky-color-wrap">
+                                    <span class="nwf-sticky-color-current color-dot @color"
+                                          title="Renk"
+                                          @onclick='() => colorPickerNodeId = colorPickerNodeId == node.InstanceId ? null : node.InstanceId'
+                                          @onclick:stopPropagation></span>
+                                    @if (colorPickerNodeId == node.InstanceId)
                                     {
-                                        var activeCol = col;
-                                        <span class="color-dot @activeCol @(color == activeCol ? "active" : "")" @onclick='() => SetParam(node, "color", activeCol)'></span>
+                                        <div class="nwf-sticky-color-pop">
+                                            @foreach (var col in new[] { "green", "blue", "yellow", "red", "purple" })
+                                            {
+                                                var activeCol = col;
+                                                <span class="color-dot @activeCol @(color == activeCol ? "active" : "")"
+                                                      @onclick='() => { SetParam(node, "color", activeCol); colorPickerNodeId = null; }'
+                                                      @onclick:stopPropagation></span>
+                                            }
+                                        </div>
                                     }
                                 </div>
-                                
-                                <button class="nwf-sticky-collapse-btn" @onclick='() => SetParam(node, "collapsed", isCollapsed ? "false" : "true")'>
+
+                                <button class="nwf-sticky-collapse-btn" @onclick="() => ToggleStickyCollapse(node)">
                                     <i class="bi @(isCollapsed ? "bi-chevron-down" : "bi-chevron-up")"></i>
                                 </button>
                                 

@@ -108,13 +108,42 @@ function bezier(a, b) {
     return `M ${a.x},${a.y} C ${a.x + dx},${a.y} ${b.x - dx},${b.y} ${b.x},${b.y}`;
 }
 
+// Cokmus bir sticky note'un kenarindaki baglanti noktasi: dis node hangi tarafa yakinsa
+// o kenarin orta yuksekligi (genelde sol = kapanma kenari). Boylece gruba giren ipler
+// silinmeden grup kenarina saplanir.
+function stickyAnchor(state, stickyId, externalPoint) {
+    const n = state.nodes.get(stickyId);
+    const el = document.getElementById(`node-${stickyId}`);
+    if (!n || !el) return null;
+    const w = el.offsetWidth, h = el.offsetHeight; // cokmus halde h ~ 52
+    const useLeft = !externalPoint || externalPoint.x <= n.x + w / 2;
+    return { x: useLeft ? n.x : n.x + w, y: n.y + h / 2 };
+}
+
 function redrawEdges(state) {
     const svg = state.edges;
     while (svg.firstChild) svg.removeChild(svg.firstChild);
 
+    const hidden = state.hiddenNodes || new Set();
     for (const conn of state.connections) {
-        const from = portCenter(state, conn.fromId, "out", conn.fromPort);
-        const to = portCenter(state, conn.toId, "in", conn.toPort);
+        const fromHidden = hidden.has(conn.fromId);
+        const toHidden = hidden.has(conn.toId);
+        // Iki ucu da gizli (grup-ici) kenar cizilmez; veride korunur, silinmez.
+        if (fromHidden && toHidden) continue;
+
+        let from, to;
+        if (toHidden) {
+            // Disaridan gruba giren ip: kaynak portundan grup kenarina.
+            from = portCenter(state, conn.fromId, "out", conn.fromPort);
+            to = from ? stickyAnchor(state, state.hiddenSticky.get(conn.toId), from) : null;
+        } else if (fromHidden) {
+            // Gruptan disari cikan ip: grup kenarindan hedef portuna.
+            to = portCenter(state, conn.toId, "in", conn.toPort);
+            from = to ? stickyAnchor(state, state.hiddenSticky.get(conn.fromId), to) : null;
+        } else {
+            from = portCenter(state, conn.fromId, "out", conn.fromPort);
+            to = portCenter(state, conn.toId, "in", conn.toPort);
+        }
         if (!from || !to) continue;
 
         const path = document.createElementNS(NS, "path");
@@ -133,6 +162,77 @@ function redrawEdges(state) {
 function moveNodeDom(state, node) {
     const el = document.getElementById(`node-${node.id}`);
     if (el) { el.style.left = node.x + "px"; el.style.top = node.y + "px"; }
+}
+
+// Sticky note'un TAM (acik) dikdortgeni. Cokmus (collapsed) halde DOM yuksekligi 52'ye dustugunden,
+// uyelik testi icin gercek yukseklik data-full-h'tan okunur (yoksa anlik yukseklik).
+function stickyRect(state, stickyId, stickyEl) {
+    const n = state.nodes.get(stickyId);
+    if (!n || !stickyEl) return null;
+    const fullH = parseFloat(stickyEl.dataset.fullH);
+    return {
+        x: n.x,
+        y: n.y,
+        w: stickyEl.offsetWidth,
+        h: Number.isFinite(fullH) && fullH > 0 ? fullH : stickyEl.offsetHeight
+    };
+}
+
+// Dikdortgenin icinde MERKEZI kalan node id'leri (stickyId haric). Olcumler DOM'dan alinir;
+// cagiran, adaylarin gorunur (olculebilir) oldugundan emin olmalidir.
+function nodesInRect(state, rect, excludeId) {
+    const result = [];
+    for (const [id, n] of state.nodes) {
+        if (id === excludeId) continue;
+        const el = document.getElementById(`node-${id}`);
+        if (!el) continue;
+        const cx = n.x + el.offsetWidth / 2;
+        const cy = n.y + el.offsetHeight / 2;
+        if (cx >= rect.x && cx <= rect.x + rect.w && cy >= rect.y && cy <= rect.y + rect.h) {
+            result.push(id);
+        }
+    }
+    return result;
+}
+
+// Bir sticky note (grup) suruklendiginde, TAM dikdortgeninin icinde kalan node'lari "takipci"
+// olarak toplar; boylece grup ile birlikte tasinirlar (cokmus halde de gizli node'lar tasinir).
+function collectContained(state, stickyId, stickyEl) {
+    const rect = stickyRect(state, stickyId, stickyEl);
+    if (!rect) return null;
+    const followers = nodesInRect(state, rect, stickyId).map(id => {
+        const n = state.nodes.get(id);
+        return { id, node: n, origX: n.x, origY: n.y };
+    });
+    return followers.length ? followers : null;
+}
+
+// Cokmus (collapsed) sticky note'larin icindeki node'lari gizler (visibility:hidden ile, boylece
+// olcumler ve port konumlari gecerli kalir). Bagli kenarlar VERIDE korunur; yalniz redrawEdges
+// tarafindan cizilmez. Acildiginda hepsi geri gelir.
+function applyCollapsedGroups(state) {
+    // Once tum gruba-gizli node'lari yeniden gorunur yap (adaylar olculebilsin).
+    for (const id of state.hiddenNodes) {
+        const el = document.getElementById(`node-${id}`);
+        if (el) el.style.visibility = "";
+    }
+    state.hiddenNodes = new Set();
+    state.hiddenSticky = new Map();
+
+    state.canvas.querySelectorAll('.nwf-sticky-note[data-collapsed="true"]').forEach(stickyEl => {
+        const stickyId = stickyEl.id.replace("node-", "");
+        const rect = stickyRect(state, stickyId, stickyEl);
+        if (!rect) return;
+        for (const id of nodesInRect(state, rect, stickyId)) {
+            state.hiddenNodes.add(id);
+            state.hiddenSticky.set(id, stickyId); // hangi cokmus gruba ait (kenar anchor'i icin)
+        }
+    });
+
+    for (const id of state.hiddenNodes) {
+        const el = document.getElementById(`node-${id}`);
+        if (el) el.style.visibility = "hidden";
+    }
 }
 
 // ---------- Pointer handling ----------
@@ -229,9 +329,13 @@ function onPointerDown(state, e) {
         const nodeId = nodeEl.id.replace("node-", "");
         const node = state.nodes.get(nodeId);
         if (!node) return;
+        // Sticky note (grup) suruklenirse, icindeki node'lari birlikte tasi.
+        const followers = nodeEl.classList.contains("nwf-sticky-note")
+            ? collectContained(state, nodeId, nodeEl)
+            : null;
         state.dragging = {
             id: nodeId, node, startX: e.clientX, startY: e.clientY,
-            origX: node.x, origY: node.y, moved: false
+            origX: node.x, origY: node.y, moved: false, followers
         };
         headEl.classList.add("dragging");
         e.preventDefault();
@@ -293,6 +397,18 @@ function onPointerMove(state, e) {
         d.node.x = Math.round((d.origX + dx) / 20) * 20;
         d.node.y = Math.round((d.origY + dy) / 20) * 20;
         moveNodeDom(state, d.node);
+
+        // Grup (sticky note) takipcilerini ayni gercek delta ile tasi; bagil konum korunur.
+        if (d.followers) {
+            const movedX = d.node.x - d.origX;
+            const movedY = d.node.y - d.origY;
+            for (const f of d.followers) {
+                f.node.x = f.origX + movedX;
+                f.node.y = f.origY + movedY;
+                moveNodeDom(state, f.node);
+            }
+        }
+
         redrawEdges(state);
         return;
     }
@@ -354,6 +470,12 @@ function onPointerUp(state, e) {
         document.querySelectorAll(".nwf-node-head.dragging, .nwf-sticky-head.dragging").forEach(el => el.classList.remove("dragging"));
         if (d.moved) {
             state.dotnet.invokeMethodAsync("OnNodeMoved", d.id, Math.round(d.node.x), Math.round(d.node.y));
+            // Grup takipcilerinin yeni konumlarini da bildir (kaydetmede dogru saklanir).
+            if (d.followers) {
+                for (const f of d.followers) {
+                    state.dotnet.invokeMethodAsync("OnNodeMoved", f.id, Math.round(f.node.x), Math.round(f.node.y));
+                }
+            }
         } else {
             state.dotnet.invokeMethodAsync("OnNodeSelected", d.id);
         }
@@ -413,6 +535,8 @@ export function init(canvasId, dotnet, readOnly = false) {
         nodes: new Map(), connections: [],
         tx: 40, ty: 40, scale: 1,
         didInitialAlign: false,
+        hiddenNodes: new Set(),
+        hiddenSticky: new Map(),
         dragging: null, panning: null, connecting: null, tempPath: null, resizing: null
     };
 
@@ -447,8 +571,12 @@ export function sync(canvasId, graphJson) {
     state.nodes = new Map(graph.nodes.map(n => [n.id, { id: n.id, x: n.x, y: n.y }]));
     state.connections = graph.connections || [];
     alignVisible(state);
-    // DOM guncellemesinin tamamlanmasi icin bir sonraki frame'de ciz
-    requestAnimationFrame(() => redrawEdges(state));
+    // DOM guncellemesinin tamamlanmasi icin bir sonraki frame'de: once cokmus gruplari uygula
+    // (gizlenecek node'lari belirle), sonra kenarlari ciz.
+    requestAnimationFrame(() => {
+        applyCollapsedGroups(state);
+        redrawEdges(state);
+    });
 }
 
 export function zoomIn(canvasId) { zoomBy(canvasId, 1.2); }

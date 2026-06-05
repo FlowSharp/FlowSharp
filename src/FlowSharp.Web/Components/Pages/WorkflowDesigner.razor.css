@@ -1199,6 +1199,7 @@ html[data-theme="dark"] .toast {
 }
 
 .nwf-sticky-title-input {
+    flex: 1;
     width: 100%;
     min-width: 0;
     border: none;
@@ -1216,27 +1217,58 @@ html[data-theme="dark"] .toast {
     gap: 10px;
 }
 
-.nwf-sticky-colors {
+/* Renk secici: tek gosterge + tiklayinca acilan popover. Yan yana 5 nokta yerine tek nokta
+   gosterilir; boylece baslik alani genis kalir, header temiz durur. */
+.nwf-sticky-color-wrap {
+    position: relative;
     display: flex;
-    gap: 6px;
+    align-items: center;
 }
 
-.nwf-sticky-colors .color-dot {
-    width: 12px;
-    height: 12px;
+/* Renk secici acikken sticky note'u node'larin (z-index:3) ustune kaldir; aksi halde sticky'nin
+   dusuk z-index'i (1) stacking context olusturup popover'i node'larin altinda birakir. */
+.nwf-node.nwf-sticky-note.picking {
+    z-index: 50;
+}
+
+.color-dot {
+    width: 13px;
+    height: 13px;
     border: 1.5px solid color-mix(in srgb, var(--nwf-text) 24%, transparent);
     border-radius: 50%;
     cursor: pointer;
     transition: transform .15s ease, box-shadow .15s ease, border-color .15s ease;
 }
 
-.nwf-sticky-colors .color-dot:hover {
-    transform: scale(1.24);
+.color-dot:hover {
+    transform: scale(1.2);
 }
 
-.nwf-sticky-colors .color-dot.active {
+.color-dot.active {
     border-color: var(--nwf-text);
     box-shadow: 0 0 0 3px color-mix(in srgb, currentColor 20%, transparent);
+}
+
+.nwf-sticky-color-current {
+    border-color: color-mix(in srgb, var(--nwf-text) 38%, transparent);
+}
+
+.nwf-sticky-color-current:hover {
+    transform: scale(1.15);
+}
+
+.nwf-sticky-color-pop {
+    position: absolute;
+    top: calc(100% + 7px);
+    right: 0;
+    z-index: 30;
+    display: flex;
+    gap: 7px;
+    padding: 8px 9px;
+    border: 1px solid var(--nwf-border);
+    border-radius: 9px;
+    background: var(--nwf-surface);
+    box-shadow: var(--nwf-shadow-lg);
 }
 
 .color-dot.green {

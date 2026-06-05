@@ -81,6 +81,7 @@ public partial class WorkflowDesigner : IAsyncDisposable
     private bool chatBusy;
     private bool ShowTyping => chatBusy &&
         (chatMessages.LastOrDefault() is not { IsUser: false } lastBot || string.IsNullOrWhiteSpace(lastBot.Text));
+    private string? colorPickerNodeId; // Acik olan sticky note renk secici (yer kazanmak icin popover).
     private bool credAddOpen;
     private string? credAddParamKey;
     private string credAddName = "";
@@ -371,6 +372,7 @@ public partial class WorkflowDesigner : IAsyncDisposable
     public Task OnCanvasClick()
     {
         selectedId = null;
+        colorPickerNodeId = null;
         StateHasChanged();
         return Task.CompletedTask;
     }
@@ -432,6 +434,14 @@ public partial class WorkflowDesigner : IAsyncDisposable
 
     private void SetParam(DesignerNode node, string key, string? value) =>
         node.Parameters[key] = value ?? string.Empty;
+
+    // Sticky note'u kuculur/acar ve canvas'i yeniden senkronlar; boylece designer.js icindeki
+    // node'lari ve gizler/gosterir (bagli kenarlar yalniz gizlenir, silinmez).
+    private void ToggleStickyCollapse(DesignerNode node)
+    {
+        SetParam(node, "collapsed", GetParam(node, "collapsed") == "true" ? "false" : "true");
+        needsSync = true;
+    }
 
     /// <summary>MultiSelect CSV degerini secili oge kumesine cevirir.</summary>
     private static HashSet<string> MultiSelectValues(string? csv) =>
