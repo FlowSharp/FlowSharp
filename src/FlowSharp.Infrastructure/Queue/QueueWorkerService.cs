@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -6,14 +7,46 @@ using FlowSharp.Application.Errors;
 
 namespace FlowSharp.Infrastructure.Queue;
 
-public class QueueWorkerService(IServiceScopeFactory scopeFactory, ILogger<QueueWorkerService> logger) : BackgroundService
+public class QueueWorkerService(
+    IServiceScopeFactory scopeFactory,
+    IConfiguration configuration,
+    ILogger<QueueWorkerService> logger) : BackgroundService
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
+        // Instance basina es zamanli is sayisi. Tek worker icin paralellik: ozellikle uzun suren
+        // (orn. AI/LLM) isler birbirini bloklamaz. 0/negatif degerler en az 1'e cekilir.
+        var concurrency = Math.Max(1, configuration.GetValue("Worker:MaxConcurrency", 5));
+
+        logger.LogInformation("QueueWorkerService baslatildi. Es zamanli is sayisi: {Concurrency}", concurrency);
+
+        // Her slot kendi dequeue dongusunde, ayri WorkerId ve ayri DI scope'uyla calisir; boylece
+        // FOR UPDATE SKIP LOCKED (Postgres) ile her slot farkli isi alir, cift calistirma olmaz.
+        var loops = new Task[concurrency];
+        for (var i = 0; i < concurrency; i++)
+        {
+            loops[i] = RunWorkerLoopAsync(stoppingToken);
+        }
+
+        await Task.WhenAll(loops);
+    }
+
+    private async Task RunWorkerLoopAsync(CancellationToken stoppingToken)
+    {
         var workerId = $"{Environment.MachineName}-{Guid.NewGuid():N}";
 
-        logger.LogInformation("QueueWorkerService baslatildi. WorkerId: {WorkerId}", workerId);
+        try
+        {
+            await DequeueLoopAsync(workerId, stoppingToken);
+        }
+        catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+        {
+            // Kapanis sirasinda beklenen iptal; sessizce cik.
+        }
+    }
 
+    private async Task DequeueLoopAsync(string workerId, CancellationToken stoppingToken)
+    {
         while (!stoppingToken.IsCancellationRequested)
         {
             using var scope = scopeFactory.CreateScope();

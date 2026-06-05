@@ -52,6 +52,11 @@
                     <MudNavLink Href="marketplace" Icon="@Icons.Material.Filled.Extension" />
                 </MudTooltip>
             </AuthorizeView>
+            <AuthorizeView Roles="Admin">
+                <MudTooltip Text="Sistem Sağlığı" Placement="Placement.Right">
+                    <MudNavLink Href="health-status" Icon="@Icons.Material.Filled.MonitorHeart" />
+                </MudTooltip>
+            </AuthorizeView>
         }
         else
         {
@@ -63,6 +68,9 @@
             </AuthorizeView>
             <AuthorizeView Policy="@FlowSharp.Domain.Security.AppPermissions.PluginsManage">
                 <MudNavLink Href="marketplace" Icon="@Icons.Material.Filled.Extension">@L["nav.marketplace"]</MudNavLink>
+            </AuthorizeView>
+            <AuthorizeView Roles="Admin">
+                <MudNavLink Href="health-status" Icon="@Icons.Material.Filled.MonitorHeart">Sistem Sağlığı</MudNavLink>
             </AuthorizeView>
         }
     </MudNavMenu>

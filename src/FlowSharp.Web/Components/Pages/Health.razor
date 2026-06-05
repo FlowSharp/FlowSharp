@@ -1,0 +1,64 @@
+@page "/health-status"
+@rendermode InteractiveServer
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.Extensions.Diagnostics.HealthChecks
+@attribute [Authorize(Roles = "Admin")]
+
+<PageTitle>Sistem Sağlığı</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.False" Class="Fsharp-page">
+    <MudStack Spacing="4">
+        <MudStack Row="true" AlignItems="AlignItems.Start" Justify="Justify.SpaceBetween" Class="Fsharp-page-head">
+            <div>
+                <MudText Typo="Typo.h4" Class="Fsharp-title">Sistem Sağlığı</MudText>
+                <MudText Typo="Typo.body1" Color="Color.Secondary">Kayıtlı tüm health check'lerin anlık durumu (yalnız yöneticiler).</MudText>
+            </div>
+            <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Refresh"
+                       OnClick="ReloadAsync" Disabled="loading">Yenile</MudButton>
+        </MudStack>
+
+        @if (report is null)
+        {
+            <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+        }
+        else
+        {
+            <MudAlert Severity="@OverallSeverity" Variant="Variant.Filled" Dense="true">
+                Genel durum: <b>@StatusText(report.Status)</b>
+                &nbsp;·&nbsp; Toplam süre: @report.TotalDuration.TotalMilliseconds.ToString("0.0") ms
+                &nbsp;·&nbsp; Son kontrol: @lastChecked.ToString("HH:mm:ss")
+            </MudAlert>
+
+            <MudPaper Class="Fsharp-surface" Elevation="0">
+                <MudTable Items="report.Entries" Dense="true" Hover="true" Elevation="0" Class="Fsharp-table">
+                    <HeaderContent>
+                        <MudTh>Bileşen</MudTh>
+                        <MudTh>Durum</MudTh>
+                        <MudTh>Süre</MudTh>
+                        <MudTh>Etiketler</MudTh>
+                        <MudTh>Açıklama / Hata</MudTh>
+                    </HeaderContent>
+                    <RowTemplate>
+                        <MudTd DataLabel="Bileşen">@context.Key</MudTd>
+                        <MudTd DataLabel="Durum">
+                            <MudChip T="string" Size="Size.Small" Color="@StatusColor(context.Value.Status)">
+                                @StatusText(context.Value.Status)
+                            </MudChip>
+                        </MudTd>
+                        <MudTd DataLabel="Süre">@context.Value.Duration.TotalMilliseconds.ToString("0.0") ms</MudTd>
+                        <MudTd DataLabel="Etiketler">@(string.Join(", ", context.Value.Tags))</MudTd>
+                        <MudTd DataLabel="Açıklama / Hata">
+                            @(context.Value.Exception?.Message ?? context.Value.Description ?? "—")
+                        </MudTd>
+                    </RowTemplate>
+                </MudTable>
+            </MudPaper>
+
+            <MudText Typo="Typo.caption" Color="Color.Secondary">
+                Probe uç noktaları: <code>/health/live</code> (liveness, anonim) ·
+                <code>/health/ready</code> (readiness, anonim) ·
+                <code>/health</code> (detaylı JSON, yalnız admin).
+            </MudText>
+        }
+    </MudStack>
+</MudContainer>

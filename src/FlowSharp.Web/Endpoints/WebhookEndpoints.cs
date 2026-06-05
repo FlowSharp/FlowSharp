@@ -72,6 +72,15 @@ public static class WebhookEndpoints
             // Webhook senkron calisir: cagirana Respond to Webhook node ciktisini doneriz.
             result = await runner.ExecuteNowAsync(match.WorkflowId, payload, cancellationToken);
         }
+        catch (WorkflowRateLimitedException)
+        {
+            // Sahip basina dakikalik limit asildi. WhatsApp/Meta gibi 2xx bekleyen saglayicilar
+            // webhook'u devre disi birakmasin diye 200 ile yanitla, ama calistirmayi atla.
+            logger.LogWarning("Webhook calismasi rate limit nedeniyle atlandi. WorkflowId: {WorkflowId}", match.WorkflowId);
+            await WriteJsonAsync(response, StatusCodes.Status200OK,
+                new JsonObject { ["ignored"] = true, ["reason"] = "rate_limited" }, cancellationToken);
+            return;
+        }
         catch (Exception exception)
         {
             logger.LogError(exception, "Webhook calismasi sirasinda hata olustu. Method: {Method}, Path: {Path}, WorkflowId: {WorkflowId}",

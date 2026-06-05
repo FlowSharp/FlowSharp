@@ -66,6 +66,10 @@ builder.Services.AddAuthorization(options =>
 builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddDatabaseDeveloperPageExceptionFilter();
 
+// Health check'ler: readiness DB baglantisini dogrular (k8s/LB probe + admin detayli rapor).
+builder.Services.AddHealthChecks()
+    .AddCheck<FlowSharp.Web.HealthChecks.DatabaseHealthCheck>("database", tags: ["ready"]);
+
 builder.Services.AddIdentityCore<ApplicationUser>(options =>
     {
         // true: kayit sonrasi e-posta onayi zorunlu (gercek SMTP gonderici devreye girer).
@@ -118,6 +122,7 @@ app.MapStaticAssets();
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();
 app.MapWebhookEndpoints();
+app.MapHealthEndpoints();
 
 // Dil degistirme: secilen dili cookie'ye yazar ve geri yonlendirir.
 app.MapGet("/set-culture", (string culture, string? redirectUri, HttpContext ctx) =>

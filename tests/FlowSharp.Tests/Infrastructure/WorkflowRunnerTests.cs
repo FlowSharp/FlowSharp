@@ -27,6 +27,7 @@ public class WorkflowRunnerTests : IDisposable
         var engine = EngineHarness.Create();
         return new WorkflowRunner(
             ctx, engine, events, queue,
+            Substitute.For<IWorkflowRunRateLimiter>(),
             Options.Create(new ExecutionOptions()),
             Microsoft.Extensions.Logging.Abstractions.NullLogger<WorkflowRunner>.Instance);
     }

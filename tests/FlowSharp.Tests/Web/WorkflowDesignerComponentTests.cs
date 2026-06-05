@@ -51,7 +51,7 @@ public class WorkflowDesignerComponentTests : IDisposable
         ctx.Services.AddSingleton(Substitute.For<IWorkflowQueue>());
         ctx.Services.AddSingleton(Substitute.For<IWorkflowExecutionEngine>());
         ctx.Services.AddSingleton(Substitute.For<IWebhookRegistrar>());
-        ctx.Services.AddSingleton(Substitute.For<FlowSharp.Web.Services.IUiNotifier>());
+        ctx.Services.AddSingleton(Substitute.For<FlowSharp.Web.Notifications.IUiNotifier>());
         ctx.Services.AddSingleton(Substitute.For<IWorkflowExecutionTracker>());
         ctx.Services.AddSingleton(Substitute.For<IWorkflowEventPublisher>());
         ctx.Services.AddSingleton<IExpressionEvaluator>(new ExpressionEvaluator());

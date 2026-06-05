@@ -91,6 +91,11 @@ public static class DependencyInjection
             };
         });
         services.AddScoped<IWorkflowRunner, WorkflowRunner>();
+        // Sahip basina dakikalik calistirma limiti (admin sahipli muaf). Singleton: sayaclar
+        // process omru boyunca bellekte tutulur.
+        services.Configure<Application.Workflows.RateLimitOptions>(
+            configuration.GetSection(Application.Workflows.RateLimitOptions.SectionName));
+        services.AddSingleton<IWorkflowRunRateLimiter, WorkflowRunRateLimiter>();
         services.AddScoped<Application.Workflows.IWorkflowService, WorkflowService>();
         services.AddScoped<Application.Workflows.IExecutionService, ExecutionService>();
         services.AddScoped<Application.Workflows.IDashboardService, DashboardService>();

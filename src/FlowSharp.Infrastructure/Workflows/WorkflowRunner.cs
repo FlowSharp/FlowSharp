@@ -21,6 +21,7 @@ public sealed class WorkflowRunner(
     IWorkflowExecutionEngine engine,
     IWorkflowEventPublisher eventPublisher,
     IWorkflowQueue queue,
+    IWorkflowRunRateLimiter rateLimiter,
     IOptions<ExecutionOptions> executionOptions,
     ILogger<WorkflowRunner> logger) : IWorkflowRunner
 {
@@ -45,6 +46,9 @@ public sealed class WorkflowRunner(
     public async Task<WorkflowRunResult> ExecuteNowAsync(Guid workflowId, JsonDocument payload, CancellationToken cancellationToken = default)
     {
         var (workflow, execution) = await PrepareExecutionAsync(workflowId, payload, cancellationToken);
+        // Senkron (manuel/webhook) yol kullanici/harici tetiklemedir: sahip basina dakikalik kotaya
+        // tabidir (admin sahipli muaf). Limit asilmissa is olusturulmadan iptal edilir.
+        await rateLimiter.EnsureWithinLimitAsync(workflow.OwnerId, cancellationToken);
         await dbContext.SaveChangesAsync(cancellationToken);
         // Senkron (webhook) yol: cagirana cikti/Respond node yaniti dondurulur; veri her zaman yakalanir.
         return await ExecuteAndSaveAsync(workflow, execution, payload, captureData: true, cancellationToken);
