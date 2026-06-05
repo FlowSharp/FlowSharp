@@ -2,42 +2,38 @@ using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Web;
 using Microsoft.JSInterop;
 using FlowSharp.Application.Errors;
-using System;
-using System.Collections.Generic;
-using System.Linq;
 using System.Text.Json;
 using System.Text.Json.Nodes;
-using System.Threading.Tasks;
-using Microsoft.EntityFrameworkCore;
 using FlowSharp.Application.Abstractions;
+using FlowSharp.Application.Json;
 using FlowSharp.Application.Nodes;
+using FlowSharp.Application.Security;
 using FlowSharp.Application.Workflows;
 using FlowSharp.Domain.Nodes;
 using FlowSharp.Domain.Workflows;
-using FlowSharp.Infrastructure.Data;
 
 namespace FlowSharp.Web.Components.Pages;
 
 public partial class WorkflowDesigner : IAsyncDisposable
 {
-    [Inject] public ApplicationDbContext DbContext { get; set; } = default!;
+    [Inject] public IWorkflowService WorkflowService { get; set; } = default!;
+    [Inject] public IExecutionService ExecutionService { get; set; } = default!;
     [Inject] public INodeCatalog NodeCatalog { get; set; } = default!;
     [Inject] public ICredentialStore CredentialStore { get; set; } = default!;
     [Inject] public FlowSharp.Application.Credentials.ICredentialCatalog CredentialCatalog { get; set; } = default!;
-    [Inject] public IWorkflowQueue Queue { get; set; } = default!;
     [Inject] public IWorkflowExecutionEngine Engine { get; set; } = default!;
-    [Inject] public IWebhookRegistrar WebhookRegistrar { get; set; } = default!;
     [Inject] public IJSRuntime JS { get; set; } = default!;
     [Inject] public NavigationManager Navigation { get; set; } = default!;
     [Inject] public IWorkflowExecutionTracker Tracker { get; set; } = default!;
     [Inject] public IWorkflowEventPublisher EventPublisher { get; set; } = default!;
     [Inject] public FlowSharp.Application.Nodes.Expressions.IExpressionEvaluator Evaluator { get; set; } = default!;
     [Inject] public Microsoft.AspNetCore.Components.Authorization.AuthenticationStateProvider AuthenticationStateProvider { get; set; } = default!;
-    [Inject] public FlowSharp.Web.Services.IUiNotifier Notifier { get; set; } = default!;
+    [Inject] public FlowSharp.Web.Notifications.IUiNotifier Notifier { get; set; } = default!;
     // Not: Node adi/aciklamasi NodeCatalog tarafindan zaten yerellestirilir; ayrica helper gerekmez.
 
     private string? currentUserId;
     private bool isAdmin;
+    private ActorScope actor;
     private string? webhookWorkflowKey;
 
     [Parameter] public Guid? WorkflowId { get; set; }
@@ -110,6 +106,7 @@ public partial class WorkflowDesigner : IAsyncDisposable
     protected override async Task OnInitializedAsync()
     {
         (currentUserId, isAdmin) = await FlowSharp.Web.Security.CurrentUser.ResolveAsync(AuthenticationStateProvider);
+        actor = new ActorScope(currentUserId, isAdmin);
         // Dropdown yalniz oturum sahibinin credential'larini gosterir (cross-tenant isim sizmasi yok).
         availableCredentials = await CredentialStore.ListAsync(currentUserId);
 
@@ -119,20 +116,19 @@ public partial class WorkflowDesigner : IAsyncDisposable
         }
 
         if (WorkflowId is null) return;
-        workflow = await DbContext.Workflows.FirstOrDefaultAsync(w => w.Id == WorkflowId);
-        if (workflow is null) return;
 
-        // Sahiplik: baskasinin workflow'unu acmaya calisan kullaniciyi listeye geri yonlendir.
-        if (!isAdmin && workflow.OwnerId != currentUserId)
+        // Sahiplik dogrulamasi servis icinde yapilir; erisim yoksa (yok/baskasinin) listeye don.
+        workflow = await WorkflowService.GetForEditAsync(WorkflowId.Value, actor);
+        if (workflow is null)
         {
-            workflow = null;
             Navigation.NavigateTo("workflows");
             return;
         }
+
         workflowName = workflow.Name;
         description = workflow.Description;
         isActive = workflow.IsActive;
-        webhookWorkflowKey = await LoadWebhookWorkflowKeyAsync(workflow.Id);
+        webhookWorkflowKey = await WorkflowService.GetWebhookKeyAsync(workflow.Id);
         LoadDefinition(workflow.Definition.RootElement);
 
         if (ExecutionId.HasValue)
@@ -144,8 +140,7 @@ public partial class WorkflowDesigner : IAsyncDisposable
     private async Task LoadExecutionHistoryAsync(Guid executionId)
     {
         // Yalniz bu workflow'a ait execution yuklenebilir (baska workflow'un cikti gecmisine erisimi engeller).
-        var exec = await DbContext.WorkflowExecutions.AsNoTracking()
-            .FirstOrDefaultAsync(e => e.Id == executionId && e.WorkflowId == WorkflowId);
+        var exec = await ExecutionService.GetForWorkflowAsync(executionId, WorkflowId!.Value);
         if (exec is null) return;
 
         runOutputs.Clear();
@@ -473,13 +468,6 @@ public partial class WorkflowDesigner : IAsyncDisposable
         return $"{Navigation.BaseUri.TrimEnd('/')}/webhook/{key}/{path}";
     }
 
-    private async Task<string?> LoadWebhookWorkflowKeyAsync(Guid workflowId) =>
-        await DbContext.WebhookRegistrations
-            .AsNoTracking()
-            .Where(registration => registration.WorkflowId == workflowId)
-            .Select(registration => registration.WorkflowKey)
-            .FirstOrDefaultAsync();
-
     // Bilgisayardan secilen dosyayi { fileName, content(base64) } olarak parametreye yazar.
     private async Task OnFileSelectedAsync(DesignerNode node, string key, Microsoft.AspNetCore.Components.Forms.InputFileChangeEventArgs e)
     {
@@ -548,25 +536,13 @@ public partial class WorkflowDesigner : IAsyncDisposable
     private async Task SaveAsync()
     {
         NormalizeJsonParameters(); // JSON alanlarini kaydederken okunabilir hale getir (beautify).
-        var definition = BuildDefinition();
-        if (workflow is null)
-        {
-            workflow = new Workflow { Name = workflowName, Description = description, IsActive = isActive, Definition = definition, OwnerId = currentUserId };
-            DbContext.Workflows.Add(workflow);
-        }
-        else
-        {
-            workflow.Name = workflowName;
-            workflow.Description = description;
-            workflow.IsActive = isActive;
-            workflow.Definition = definition;
-            workflow.UpdatedAt = DateTimeOffset.UtcNow;
-        }
-        await DbContext.SaveChangesAsync();
-        await WebhookRegistrar.SyncAsync(workflow.Id, workflow.Definition.RootElement, isActive);
-        webhookWorkflowKey = await LoadWebhookWorkflowKeyAsync(workflow.Id);
+        var input = new WorkflowSaveInput(WorkflowId, workflowName, description, isActive, BuildDefinition());
+
+        // Sahiplik dogrulamasi, kalici kayit ve webhook senkronu servis icinde tek noktada yapilir.
+        var saved = await WorkflowService.SaveAsync(input, actor);
+        webhookWorkflowKey = saved.WebhookKey;
         await ShowToast("Workflow kaydedildi.");
-        if (WorkflowId is null) Navigation.NavigateTo($"workflows/designer/{workflow.Id}");
+        if (WorkflowId is null) Navigation.NavigateTo($"workflows/designer/{saved.Id}");
     }
 
     private async Task ExecuteAsync()
@@ -663,7 +639,7 @@ public partial class WorkflowDesigner : IAsyncDisposable
         }
     }
 
-    /// <summary>Tum node'lardaki Json tipli parametreleri tek helper'dan (JsonText) bicimler.</summary>
+    /// <summary>Tum node'lardaki Json tipli parametreleri tek helper'dan (FlowJson) bicimler.</summary>
     private void NormalizeJsonParameters()
     {
         foreach (var node in nodes)
@@ -678,7 +654,7 @@ public partial class WorkflowDesigner : IAsyncDisposable
             {
                 if (node.Parameters.TryGetValue(p.Key, out var value))
                 {
-                    node.Parameters[p.Key] = FlowSharp.Web.Services.JsonText.Beautify(value);
+                    node.Parameters[p.Key] = FlowJson.Beautify(value);
                 }
             }
         }
@@ -965,7 +941,7 @@ public partial class WorkflowDesigner : IAsyncDisposable
                 return ExprPreview.Invalid("Ifade cozulemedi (alan bulunamadi veya gecersiz).");
             }
 
-            var text = result is JsonValue jv ? jv.ToString() : result.ToJsonString();
+            var text = result is JsonValue jv ? jv.ToString() : result.ToJsonString(FlowJson.Relaxed);
             return ExprPreview.Valid(text);
         }
         catch (Exception ex)
@@ -1036,13 +1012,6 @@ public partial class WorkflowDesigner : IAsyncDisposable
         {
             return [];
         }
-    }
-
-    private sealed record ExprPreview(string State, string Message)
-    {
-        public static readonly ExprPreview None = new("none", "");
-        public static ExprPreview Valid(string preview) => new("valid", preview);
-        public static ExprPreview Invalid(string message) => new("invalid", message);
     }
 
     // ---------- Credential inline add ----------
@@ -1205,7 +1174,7 @@ public partial class WorkflowDesigner : IAsyncDisposable
         if (result.Output is JsonObject obj && obj["main"] is JsonArray arr && arr.Count > 0 && arr[0] is JsonObject first)
         {
             if (first["output"] is not null) return first["output"]!.ToString();
-            return first.ToJsonString();
+            return first.ToJsonString(FlowJson.Relaxed);
         }
         return "(yanit uretilemedi)";
     }
@@ -1235,48 +1204,11 @@ public partial class WorkflowDesigner : IAsyncDisposable
         selfRef?.Dispose();
     }
 
-    private sealed class DesignerNode
-    {
-        public required string InstanceId { get; init; }
-        public required string NodeKey { get; init; }
-        public required string Name { get; set; }
-        public required string Category { get; init; }
-        public int X { get; set; }
-        public int Y { get; set; }
-        public string Status { get; set; } = "";
-        public Dictionary<string, string> Parameters { get; } = new(StringComparer.OrdinalIgnoreCase);
-    }
-
-    private sealed record DesignerConnection(string FromId, int FromPort, string ToId, int ToPort);
-
-    // Gosterim icin JSON: Unicode'u (Turkce dahil) escape etmeden, okunabilir yazar.
-    private static readonly JsonSerializerOptions DisplayJson = new()
-    {
-        WriteIndented = true,
-        Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping
-    };
+    // Gosterim icin JSON: Unicode'u (Turkce dahil) escape etmeden, okunabilir yazar (ortak ayar).
+    private static readonly JsonSerializerOptions DisplayJson = FlowJson.RelaxedIndented;
 
     private static RunOutput ToRunOutput(NodeRunData data) =>
         new(data.ItemCount,
             data.Output.ToJsonString(DisplayJson),
             data.Status == NodeRunStatus.Failed ? data.Error : null);
-
-    private sealed record RunOutput(int ItemCount, string Json, string? Error = null);
-
-    private sealed class ChatMessage(bool isUser, string text)
-    {
-        public bool IsUser { get; } = isUser;
-        public string Text { get; set; } = text;
-    }
-
-    private sealed class CredField
-    {
-        public string Key { get; set; } = "";
-        public string? Value { get; set; }
-        // Sema'dan gelen alanlarda render tipini ve etiketini tasir; serbest alanlarda String/key.
-        public string? Label { get; set; }
-        public FlowSharp.Domain.Credentials.CredentialFieldType FieldType { get; set; }
-            = FlowSharp.Domain.Credentials.CredentialFieldType.String;
-        public bool FromSchema { get; set; }
-    }
 }

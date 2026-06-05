@@ -11,7 +11,7 @@ namespace FlowSharp.Nodes;
 /// </summary>
 public sealed class NodeRegistry : INodeRegistry
 {
-    private readonly object gate = new();
+    private readonly Lock gate = new();
     private readonly Dictionary<string, INodeType> executables;
     private IReadOnlyList<NodeDefinition> definitions;
 

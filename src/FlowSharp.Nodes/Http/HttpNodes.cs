@@ -2,6 +2,7 @@ using System.Net.Http;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using FlowSharp.Application.Json;
 using FlowSharp.Application.Nodes;
 using FlowSharp.Domain.Nodes;
 
@@ -49,7 +50,7 @@ public abstract class HttpNodeBase : PerItemNodeType
             context.GetJson("body", index) is JsonNode body &&
             body is JsonObject or JsonArray)
         {
-            request.Content = new StringContent(body.ToJsonString(), Encoding.UTF8, "application/json");
+            request.Content = new StringContent(body.ToJsonString(FlowJson.Relaxed), Encoding.UTF8, "application/json");
         }
 
         var factory = (IHttpClientFactory)context.Services.GetService(typeof(IHttpClientFactory))!;

@@ -1,5 +1,6 @@
 ﻿using System.Text;
 using System.Text.Json.Nodes;
+using FlowSharp.Application.Json;
 using FlowSharp.Application.Nodes;
 using FlowSharp.Domain.Nodes;
 using FlowSharp.Nodes.Helpers;
@@ -25,7 +26,7 @@ namespace FlowSharp.Nodes.Communication
 
             using var request = new HttpRequestMessage(HttpMethod.Post, url)
             {
-                Content = new StringContent(payload.ToJsonString(), Encoding.UTF8, "application/json")
+                Content = new StringContent(payload.ToJsonString(FlowJson.Relaxed), Encoding.UTF8, "application/json")
             };
 
             using var response = await HttpHelper.Client(context).SendAsync(request, context.CancellationToken);

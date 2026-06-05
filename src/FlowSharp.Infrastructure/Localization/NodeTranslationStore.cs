@@ -11,7 +11,7 @@ public sealed class NodeTranslationStore : INodeTranslationStore
 {
     public const string DefaultCulture = "tr";
 
-    private readonly object gate = new();
+    private readonly Lock gate = new();
     // source -> culture -> (key -> value)
     private readonly Dictionary<string, Dictionary<string, Dictionary<string, string>>> bySource =
         new(StringComparer.OrdinalIgnoreCase);

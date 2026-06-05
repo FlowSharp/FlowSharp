@@ -84,7 +84,7 @@ public class WorkflowRunnerTests : IDisposable
         await AddWorkflow(errorDef);
 
         var runner = NewRunner(out _);
-        var act = async () => await runner.ExecuteNowAsync(failing.Id, JsonDocument.Parse("""{"source":"manual"}"""));
+        async Task<WorkflowRunResult> act() => await runner.ExecuteNowAsync(failing.Id, JsonDocument.Parse("""{"source":"manual"}"""));
 
         // ExecuteNow basarisizlikta exception atmaz; sonuc dondurur (RunAsync atar).
         var result = await act();

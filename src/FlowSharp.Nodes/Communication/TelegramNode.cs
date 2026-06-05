@@ -1,4 +1,5 @@
 ﻿using FlowSharp.Application.Credentials;
+using FlowSharp.Application.Json;
 using FlowSharp.Application.Nodes;
 using FlowSharp.Domain.Credentials;
 using FlowSharp.Domain.Nodes;
@@ -39,7 +40,7 @@ namespace FlowSharp.Nodes.Communication
 
             using var request = new HttpRequestMessage(HttpMethod.Post, $"https://api.telegram.org/bot{token}/sendMessage")
             {
-                Content = new StringContent(payload.ToJsonString(), Encoding.UTF8, "application/json")
+                Content = new StringContent(payload.ToJsonString(FlowJson.Relaxed), Encoding.UTF8, "application/json")
             };
 
             using var response = await HttpHelper.Client(context).SendAsync(request, context.CancellationToken);

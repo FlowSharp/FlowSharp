@@ -17,39 +17,24 @@ internal static class ConditionEvaluator
         left ??= string.Empty;
         right ??= string.Empty;
 
-        switch (operation)
+        return operation switch
         {
-            case "isEmpty":
-                return string.IsNullOrEmpty(left);
-            case "isNotEmpty":
-                return !string.IsNullOrEmpty(left);
-            case "isTrue":
-                return bool.TryParse(left, out var bt) && bt;
-            case "isFalse":
-                return bool.TryParse(left, out var bf) && !bf;
-            case "equals":
-                return NumericOr(left, right, (a, b) => a == b, () => string.Equals(left, right, StringComparison.Ordinal));
-            case "notEquals":
-                return NumericOr(left, right, (a, b) => a != b, () => !string.Equals(left, right, StringComparison.Ordinal));
-            case "contains":
-                return left.Contains(right, StringComparison.OrdinalIgnoreCase);
-            case "notContains":
-                return !left.Contains(right, StringComparison.OrdinalIgnoreCase);
-            case "startsWith":
-                return left.StartsWith(right, StringComparison.OrdinalIgnoreCase);
-            case "endsWith":
-                return left.EndsWith(right, StringComparison.OrdinalIgnoreCase);
-            case "greaterThan":
-                return Numeric(left, right, (a, b) => a > b);
-            case "lessThan":
-                return Numeric(left, right, (a, b) => a < b);
-            case "greaterOrEqual":
-                return Numeric(left, right, (a, b) => a >= b);
-            case "lessOrEqual":
-                return Numeric(left, right, (a, b) => a <= b);
-            default:
-                return false;
-        }
+            "isEmpty" => string.IsNullOrEmpty(left),
+            "isNotEmpty" => !string.IsNullOrEmpty(left),
+            "isTrue" => bool.TryParse(left, out var bt) && bt,
+            "isFalse" => bool.TryParse(left, out var bf) && !bf,
+            "equals" => NumericOr(left, right, (a, b) => a == b, () => string.Equals(left, right, StringComparison.Ordinal)),
+            "notEquals" => NumericOr(left, right, (a, b) => a != b, () => !string.Equals(left, right, StringComparison.Ordinal)),
+            "contains" => left.Contains(right, StringComparison.OrdinalIgnoreCase),
+            "notContains" => !left.Contains(right, StringComparison.OrdinalIgnoreCase),
+            "startsWith" => left.StartsWith(right, StringComparison.OrdinalIgnoreCase),
+            "endsWith" => left.EndsWith(right, StringComparison.OrdinalIgnoreCase),
+            "greaterThan" => Numeric(left, right, (a, b) => a > b),
+            "lessThan" => Numeric(left, right, (a, b) => a < b),
+            "greaterOrEqual" => Numeric(left, right, (a, b) => a >= b),
+            "lessOrEqual" => Numeric(left, right, (a, b) => a <= b),
+            _ => false,
+        };
     }
 
     private static bool Numeric(string left, string right, Func<double, double, bool> compare) =>

@@ -1,8 +1,7 @@
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Authorization;
-using Microsoft.EntityFrameworkCore;
 using FlowSharp.Application.Abstractions;
-using FlowSharp.Infrastructure.Data;
+using FlowSharp.Application.Identity;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -14,8 +13,8 @@ public partial class Credentials
 {
     [Inject] public ICredentialStore CredentialStore { get; set; } = default!;
     [Inject] public AuthenticationStateProvider AuthenticationStateProvider { get; set; } = default!;
-    [Inject] public ApplicationDbContext DbContext { get; set; } = default!;
-    [Inject] public FlowSharp.Web.Services.IUiNotifier Notifier { get; set; } = default!;
+    [Inject] public IUserDirectory UserDirectory { get; set; } = default!;
+    [Inject] public FlowSharp.Web.Notifications.IUiNotifier Notifier { get; set; } = default!;
 
     private IReadOnlyList<CredentialSummary>? items;
     private bool editing;
@@ -24,7 +23,7 @@ public partial class Credentials
     private readonly List<FieldRow> fields = [];
     private string? currentUserId;
     private bool isAdmin;
-    private Dictionary<string, string> ownerEmails = [];
+    private IReadOnlyDictionary<string, string> ownerEmails = new Dictionary<string, string>();
 
     // Admin gorunumu: kendi credential'lari ust tabloda, digerleri alt tabloda.
     private IEnumerable<CredentialSummary> MineCredentials => items?.Where(c => c.OwnerId == currentUserId) ?? [];
@@ -45,10 +44,8 @@ public partial class Credentials
     {
         items = await CredentialStore.ListAsync(ScopeOwnerId);
 
-        var ownerIds = items.Where(c => c.OwnerId != null).Select(c => c.OwnerId!).Distinct().ToList();
-        ownerEmails = await DbContext.Users
-            .Where(u => ownerIds.Contains(u.Id))
-            .ToDictionaryAsync(u => u.Id, u => u.Email ?? u.UserName ?? u.Id);
+        var ownerIds = items.Where(c => c.OwnerId != null).Select(c => c.OwnerId!);
+        ownerEmails = await UserDirectory.GetEmailsAsync(ownerIds);
     }
 
     /// <summary>Credential sahibinin gosterilecek etiketi (e-posta); sahipsizse "Sistem".</summary>

@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Text;
 using System.Text.Json.Nodes;
+using FlowSharp.Application.Json;
 using FlowSharp.Application.Nodes.Expressions;
 
 namespace FlowSharp.Infrastructure.Workflows.Expressions;
@@ -231,6 +232,6 @@ public sealed class ExpressionEvaluator : IExpressionEvaluator
             return value.ToString();
         }
 
-        return node.ToJsonString();
+        return node.ToJsonString(FlowJson.Relaxed);
     }
 }

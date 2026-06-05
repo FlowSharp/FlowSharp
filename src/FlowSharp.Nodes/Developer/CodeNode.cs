@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Jint;
+using FlowSharp.Application.Json;
 using FlowSharp.Application.Nodes;
 using FlowSharp.Domain.Nodes;
 
@@ -44,7 +45,7 @@ public sealed class CodeNode : NodeType
             .LimitMemory(16_000_000)
             .MaxStatements(100_000));
 
-        engine.SetValue("__input", inputArray.ToJsonString());
+        engine.SetValue("__input", inputArray.ToJsonString(FlowJson.Relaxed));
 
         var wrapped = $$"""
             JSON.stringify((function() {

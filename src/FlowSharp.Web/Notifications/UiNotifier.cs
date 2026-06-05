@@ -1,7 +1,7 @@
 using MudBlazor;
 using FlowSharp.Web.Localization;
 
-namespace FlowSharp.Web.Services;
+namespace FlowSharp.Web.Notifications;
 
 /// <summary>
 /// Merkezi UI bildirim ve onay servisi. Toast (snackbar) ve onay dialog'larini tek bir

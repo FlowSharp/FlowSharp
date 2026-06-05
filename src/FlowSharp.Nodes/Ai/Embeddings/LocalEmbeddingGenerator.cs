@@ -10,7 +10,7 @@ namespace FlowSharp.Nodes.Ai.Embeddings;
 public sealed class LocalEmbeddingGenerator : IEmbeddingGenerator, IDisposable
 {
     private readonly LocalEmbedder embedder = new();
-    private readonly object gate = new();
+    private readonly Lock gate = new();
 
     public Task<IReadOnlyList<float[]>> EmbedAsync(IReadOnlyList<string> texts, CancellationToken cancellationToken = default)
     {

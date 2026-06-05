@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Text.Json.Nodes;
 using FlowSharp.Application.Abstractions;
+using FlowSharp.Application.Json;
 using FlowSharp.Application.Nodes;
 using FlowSharp.Application.Nodes.Expressions;
 
@@ -56,7 +57,7 @@ internal sealed class NodeExecutionContext(
             return string.IsNullOrEmpty(resolved) ? defaultValue : resolved;
         }
 
-        return raw.ToJsonString();
+        return raw.ToJsonString(FlowJson.Relaxed);
     }
 
     public bool GetBoolean(string name, int itemIndex = 0, bool defaultValue = false)

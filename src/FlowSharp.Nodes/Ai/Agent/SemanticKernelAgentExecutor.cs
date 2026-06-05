@@ -7,6 +7,7 @@ using Microsoft.SemanticKernel.Connectors.OpenAI;
 using FlowSharp.Application.Ai;
 using FlowSharp.Application.Abstractions;
 using FlowSharp.Application.Errors;
+using FlowSharp.Application.Json;
 using FlowSharp.Application.Nodes;
 using FlowSharp.Application.Nodes.Agents;
 using FlowSharp.Application.Workflows;
@@ -277,7 +278,7 @@ public sealed class SemanticKernelAgentExecutor(
                     ["user"] = userText,
                     ["assistant"] = assistantText,
                     ["createdAt"] = DateTimeOffset.UtcNow.ToString("O")
-                }.ToJsonString();
+                }.ToJsonString(FlowJson.Relaxed);
 
                 await store.UpsertAsync(scope, collection,
                     [new VectorRecord($"chat-{DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()}-{Guid.NewGuid():N}", text, vector, metadata)],
@@ -340,7 +341,7 @@ public sealed class SemanticKernelAgentExecutor(
             }
         }
 
-        return json.ToJsonString();
+        return json.ToJsonString(FlowJson.Relaxed);
     }
 
     /// <summary>
@@ -429,7 +430,7 @@ public sealed class SemanticKernelAgentExecutor(
         var primary = result.PrimaryItems.FirstOrDefault();
         await NotifySubNodeAsync(request, tool, result.Succeeded ? NodeRunStatus.Succeeded : NodeRunStatus.Failed,
             primary?.Json.DeepClone() ?? new JsonObject(), result.Error, startedAt, result.PrimaryItems.Count);
-        return primary?.Json.ToJsonString() ?? "";
+        return primary?.Json.ToJsonString(FlowJson.Relaxed) ?? "";
     }
 
     private static async Task NotifySubNodeAsync(

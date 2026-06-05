@@ -91,6 +91,10 @@ public static class DependencyInjection
             };
         });
         services.AddScoped<IWorkflowRunner, WorkflowRunner>();
+        services.AddScoped<Application.Workflows.IWorkflowService, WorkflowService>();
+        services.AddScoped<Application.Workflows.IExecutionService, ExecutionService>();
+        services.AddScoped<Application.Workflows.IDashboardService, DashboardService>();
+        services.AddScoped<Application.Identity.IUserDirectory, Identity.UserDirectory>();
         services.Configure<Application.Workflows.ExecutionOptions>(
             configuration.GetSection(Application.Workflows.ExecutionOptions.SectionName));
         services.AddScoped<IWorkflowExecutionEngine, WorkflowExecutionEngine>();

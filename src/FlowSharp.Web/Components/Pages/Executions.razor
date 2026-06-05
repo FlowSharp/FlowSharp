@@ -1,10 +1,8 @@
 @page "/executions"
 @rendermode InteractiveServer
 @using Microsoft.AspNetCore.Authorization
-@using Microsoft.EntityFrameworkCore
 @using FlowSharp.Domain.Security
 @using FlowSharp.Domain.Workflows
-@using FlowSharp.Infrastructure.Data
 @attribute [Authorize(Policy = AppPermissions.ExecutionsRead)]
 
 <PageTitle>@L["nav.executions"]</PageTitle>

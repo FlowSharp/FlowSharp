@@ -3,6 +3,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using FlowSharp.Application.Abstractions;
 using FlowSharp.Application.Errors;
+using FlowSharp.Application.Json;
 using FlowSharp.Application.Workflows;
 
 namespace FlowSharp.Web.Endpoints;
@@ -111,7 +112,7 @@ public static class WebhookEndpoints
     private static async Task WriteCustomResponseAsync(HttpResponse response, JsonObject responseItem, CancellationToken cancellationToken)
     {
         var statusCode = responseItem["statusCode"] is JsonValue sc && sc.TryGetValue<int>(out var code) ? code : 200;
-        var body = responseItem["body"]?.GetValue<string>() ?? responseItem["body"]?.ToJsonString() ?? "";
+        var body = responseItem["body"]?.GetValue<string>() ?? responseItem["body"]?.ToJsonString(FlowJson.Relaxed) ?? "";
 
         string? contentType = null;
         if (responseItem["headers"] is JsonObject headers)
@@ -159,7 +160,8 @@ public static class WebhookEndpoints
     {
         response.StatusCode = statusCode;
         response.ContentType = "application/json";
-        await response.WriteAsync(body.ToJsonString(), Encoding.UTF8, cancellationToken);
+        // Turkce karakterler \uXXXX'e kacirilmasin diye ortak "relaxed" cikti secenekleri.
+        await response.WriteAsync(body.ToJsonString(FlowJson.Relaxed), Encoding.UTF8, cancellationToken);
     }
 
     private static async Task<JsonDocument> BuildPayloadAsync(string path, string nodeName, HttpRequest request, CancellationToken cancellationToken)

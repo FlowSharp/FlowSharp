@@ -12,7 +12,7 @@ namespace FlowSharp.Application.Errors;
 /// </summary>
 public sealed class ErrorTranslator : IErrorTranslator
 {
-    private readonly object gate = new();
+    private readonly Lock gate = new();
     private ErrorRule[] rules;
 
     public ErrorTranslator(IEnumerable<ErrorRule> initialRules) => rules = initialRules.ToArray();

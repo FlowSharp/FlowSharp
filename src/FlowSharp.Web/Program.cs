@@ -29,7 +29,7 @@ builder.Host.UseSerilog((context, services, configuration) => configuration
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 builder.Services.AddMudServices();
-builder.Services.AddScoped<FlowSharp.Web.Services.IUiNotifier, FlowSharp.Web.Services.UiNotifier>();
+builder.Services.AddScoped<FlowSharp.Web.Notifications.IUiNotifier, FlowSharp.Web.Notifications.UiNotifier>();
 
 // UI dili: lang/*.json. Desteklenen diller klasordeki dosyalardan turetilir.
 builder.Services.AddSingleton<ILocalizer, JsonLocalizer>();

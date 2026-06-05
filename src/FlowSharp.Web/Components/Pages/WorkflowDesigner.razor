@@ -465,7 +465,7 @@
                                     @if (p.Type == NodeParameterType.Json && !IsReadOnly)
                                     {
                                         <button class="btn btn-ghost btn-sm" title="JSON'u düzenle (beautify)"
-                                                @onclick="() => SetParam(openNode, p.Key, FlowSharp.Web.Services.JsonText.Beautify(GetParam(openNode, p.Key)))">
+                                                @onclick="() => SetParam(openNode, p.Key, FlowSharp.Application.Json.FlowJson.Beautify(GetParam(openNode, p.Key)))">
                                             { } Düzenle
                                         </button>
                                     }

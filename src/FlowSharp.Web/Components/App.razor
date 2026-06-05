@@ -5,6 +5,17 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <base href="/" />
+    @* Temayi ilk boyamadan ONCE uygula: boylece sayfa yenilemesinde (ozellikle salt-CSS olan
+       WorkflowDesigner) dark/light dogru acilir; Blazor devresinin baslamasini beklemez (FOUC yok). *@
+    <script>
+        (function () {
+            try {
+                if (localStorage.getItem("FlowSharp-theme") === "dark") {
+                    document.documentElement.dataset.theme = "dark";
+                }
+            } catch (e) { }
+        })();
+    </script>
     <ResourcePreloader />
     <link rel="stylesheet" href="@Assets["lib/bootstrap/dist/css/bootstrap.min.css"]" />
     <link rel="stylesheet" href="@Assets["_content/MudBlazor/MudBlazor.min.css"]" />

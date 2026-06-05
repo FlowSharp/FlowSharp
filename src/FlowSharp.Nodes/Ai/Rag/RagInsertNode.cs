@@ -1,6 +1,7 @@
 using System.Text.Json.Nodes;
 using Microsoft.Extensions.DependencyInjection;
 using FlowSharp.Application.Ai;
+using FlowSharp.Application.Json;
 using FlowSharp.Application.Nodes;
 using FlowSharp.Domain.Nodes;
 
@@ -55,7 +56,7 @@ public sealed class RagInsertNode : NodeType
         var texts = context.Items
             .Select(item => item.Json.TryGetPropertyValue(textField, out var v) && v is not null
                 ? v.ToString()
-                : item.Json.ToJsonString())
+                : item.Json.ToJsonString(FlowJson.Relaxed))
             .ToList();
 
         var vectors = await embedder.EmbedAsync(texts, context.CancellationToken);
@@ -69,7 +70,7 @@ public sealed class RagInsertNode : NodeType
                 : Guid.NewGuid().ToString("N");
             var metadata = !string.IsNullOrWhiteSpace(metadataField) && json.TryGetPropertyValue(metadataField, out var mv) && mv is not null
                 ? mv.ToString()
-                : json.ToJsonString();
+                : json.ToJsonString(FlowJson.Relaxed);
 
             records.Add(new VectorRecord(id, texts[i], vectors[i], metadata));
         }

@@ -1,4 +1,5 @@
 using FlowSharp.Application.Credentials;
+using FlowSharp.Application.Json;
 using FlowSharp.Application.Nodes;
 using FlowSharp.Domain.Credentials;
 using FlowSharp.Domain.Nodes;
@@ -93,7 +94,7 @@ public sealed class WhatsAppMessageNode : PerItemNodeType, IProvidesCredentials
         var url = $"https://graph.facebook.com/{apiVersion}/{phoneNumberId}/messages";
         using var request = new HttpRequestMessage(HttpMethod.Post, url)
         {
-            Content = new StringContent(payload.ToJsonString(), Encoding.UTF8, "application/json")
+            Content = new StringContent(payload.ToJsonString(FlowJson.Relaxed), Encoding.UTF8, "application/json")
         };
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
 

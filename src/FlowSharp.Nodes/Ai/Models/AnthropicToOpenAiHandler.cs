@@ -1,6 +1,7 @@
 using System.Net.Http;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using FlowSharp.Application.Json;
 
 namespace FlowSharp.Nodes.Ai.Models;
 
@@ -80,7 +81,7 @@ public sealed class AnthropicToOpenAiHandler : DelegatingHandler
         using var anthropicHttpReq = new HttpRequestMessage(HttpMethod.Post, "https://api.anthropic.com/v1/messages");
         anthropicHttpReq.Headers.Add("x-api-key", _apiKey);
         anthropicHttpReq.Headers.Add("anthropic-version", "2023-06-01");
-        anthropicHttpReq.Content = new StringContent(anthropicRequest.ToJsonString(), System.Text.Encoding.UTF8, "application/json");
+        anthropicHttpReq.Content = new StringContent(anthropicRequest.ToJsonString(FlowJson.Relaxed), System.Text.Encoding.UTF8, "application/json");
 
         using var client = new HttpClient();
         var anthropicHttpResp = await client.SendAsync(anthropicHttpReq, cancellationToken);
@@ -136,7 +137,7 @@ public sealed class AnthropicToOpenAiHandler : DelegatingHandler
 
         var response = new HttpResponseMessage(System.Net.HttpStatusCode.OK)
         {
-            Content = new StringContent(openAiResponse.ToJsonString(), System.Text.Encoding.UTF8, "application/json")
+            Content = new StringContent(openAiResponse.ToJsonString(FlowJson.Relaxed), System.Text.Encoding.UTF8, "application/json")
         };
         return response;
     }

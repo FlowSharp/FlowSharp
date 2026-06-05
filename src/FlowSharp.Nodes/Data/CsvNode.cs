@@ -3,6 +3,7 @@ using System.Text;
 using System.Text.Json.Nodes;
 using CsvHelper;
 using CsvHelper.Configuration;
+using FlowSharp.Application.Json;
 using FlowSharp.Application.Nodes;
 using FlowSharp.Domain.Nodes;
 
@@ -74,7 +75,7 @@ public sealed class CsvNode : NodeType
                 foreach (var header in headers)
                 {
                     var value = item.Json.TryGetPropertyValue(header, out var node) ? node : null;
-                    csv.WriteField(value is JsonValue ? value.ToString() : value?.ToJsonString() ?? "");
+                    csv.WriteField(value is JsonValue ? value.ToString() : value?.ToJsonString(FlowJson.Relaxed) ?? "");
                 }
 
                 csv.NextRecord();

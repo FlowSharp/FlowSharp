@@ -27,7 +27,7 @@ public sealed class PluginManager(
     IOptions<PluginOptions> options,
     ILogger<PluginManager> logger) : IPluginManager
 {
-    private readonly object gate = new();
+    private readonly Lock gate = new();
     private readonly Dictionary<string, LoadedPlugin> plugins = new(StringComparer.OrdinalIgnoreCase);
     private readonly PluginOptions settings = options.Value;
 
