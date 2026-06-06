@@ -3,6 +3,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 using Microsoft.Data.SqlClient;
+using Microsoft.Data.Sqlite;
 using MySqlConnector;
 using Npgsql;
 using FlowSharp.Application.Nodes;
@@ -13,7 +14,8 @@ public enum DatabaseProvider
 {
     Postgres,
     SqlServer,
-    MySql
+    MySql,
+    Sqlite
 }
 
 public sealed record DatabaseConnectionState(
@@ -21,7 +23,9 @@ public sealed record DatabaseConnectionState(
     string CredentialType,
     string CredentialName,
     string? Database,
-    string? Schema);
+    string? Schema,
+    // SQLite icin: cozulmus mutlak .db dosya yolu (credential yok, dosya tabanli).
+    string? DataSource = null);
 
 internal static class DatabaseNodeHelpers
 {
@@ -37,7 +41,8 @@ internal static class DatabaseNodeHelpers
             ["credentialType"] = state.CredentialType,
             ["credentialName"] = state.CredentialName,
             ["database"] = state.Database,
-            ["schema"] = state.Schema
+            ["schema"] = state.Schema,
+            ["dataSource"] = state.DataSource
         };
     }
 
@@ -59,7 +64,8 @@ internal static class DatabaseNodeHelpers
                 json["credentialType"]?.ToString() ?? "",
                 json["credentialName"]?.ToString() ?? "",
                 json["database"]?.ToString(),
-                json["schema"]?.ToString())
+                json["schema"]?.ToString(),
+                json["dataSource"]?.ToString())
             : null;
     }
 
@@ -76,6 +82,20 @@ internal static class DatabaseNodeHelpers
         DatabaseConnectionState state,
         INodeExecutionContext context)
     {
+        // SQLite credential degil dosya tabanlidir: baglanti dizesi DataSource'tan kurulur.
+        if (state.Provider == DatabaseProvider.Sqlite)
+        {
+            if (string.IsNullOrWhiteSpace(state.DataSource))
+            {
+                return null;
+            }
+
+            var sqlite = new SqliteConnection($"Data Source={state.DataSource};Pooling=True");
+            await sqlite.OpenAsync(context.CancellationToken);
+            await ApplySqlitePragmasAsync(sqlite, context.CancellationToken);
+            return sqlite;
+        }
+
         var connectionString = await ResolveConnectionStringAsync(state.Provider, state.CredentialType, state.CredentialName, context, state.Database);
         if (string.IsNullOrWhiteSpace(connectionString))
         {
@@ -85,6 +105,17 @@ internal static class DatabaseNodeHelpers
         var connection = CreateConnection(state.Provider, connectionString);
         await connection.OpenAsync(context.CancellationToken);
         return connection;
+    }
+
+    /// <summary>
+    /// SQLite baglantisi acilir acilmaz: foreign key kisitlarini etkinlestir (varsayilan KAPALI),
+    /// eszamanli yazma icin WAL modu ve kilit beklemesi icin busy_timeout uygula.
+    /// </summary>
+    public static async Task ApplySqlitePragmasAsync(DbConnection connection, CancellationToken cancellationToken)
+    {
+        await using var cmd = connection.CreateCommand();
+        cmd.CommandText = "PRAGMA foreign_keys = ON; PRAGMA journal_mode = WAL; PRAGMA busy_timeout = 5000;";
+        await cmd.ExecuteNonQueryAsync(cancellationToken);
     }
 
     public static async Task<string?> ResolveConnectionStringAsync(
@@ -126,6 +157,7 @@ internal static class DatabaseNodeHelpers
         {
             DatabaseProvider.SqlServer => new SqlConnection(connectionString),
             DatabaseProvider.MySql => new MySqlConnection(connectionString),
+            DatabaseProvider.Sqlite => new SqliteConnection(connectionString),
             _ => new NpgsqlConnection(connectionString)
         };
 
@@ -213,8 +245,10 @@ internal static class DatabaseNodeHelpers
     public static Dictionary<string, JsonNode?> ReadColumns(INodeExecutionContext context, string parameter = "columnsJson")
     {
         var json = context.GetJson(parameter);
+        // Her kolon degeri bir ifade ({{...}}) icerebilir; ResolveValue ile tek tek cozumlenir.
+        // (GetJson yalniz tum parametre tek ifadeyse cozer; obje icindeki alanlari cozmez.)
         return json as JsonObject is { } obj
-            ? obj.ToDictionary(pair => pair.Key, pair => pair.Value)
+            ? obj.ToDictionary(pair => pair.Key, pair => context.ResolveValue(pair.Value))
             : [];
     }
 
@@ -321,6 +355,7 @@ internal static class DatabaseNodeHelpers
                 ? "SELECT TABLE_NAME AS table_name FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_TYPE = 'BASE TABLE' ORDER BY TABLE_NAME"
                 : "SELECT TABLE_NAME AS table_name FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_TYPE = 'BASE TABLE' AND TABLE_SCHEMA = @schema ORDER BY TABLE_NAME",
             DatabaseProvider.MySql => "SELECT TABLE_NAME AS table_name FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_TYPE = 'BASE TABLE' ORDER BY TABLE_NAME",
+            DatabaseProvider.Sqlite => "SELECT name AS table_name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name",
             _ => string.IsNullOrWhiteSpace(schema)
                 ? "SELECT table_name FROM information_schema.tables WHERE table_type = 'BASE TABLE' AND table_schema NOT IN ('pg_catalog', 'information_schema') ORDER BY table_name"
                 : "SELECT table_name FROM information_schema.tables WHERE table_type = 'BASE TABLE' AND table_schema = @schema ORDER BY table_name"
@@ -337,6 +372,69 @@ internal static class DatabaseNodeHelpers
         {
             var name = reader.GetString(0);
             options.Add(new NodeParameterOption(name, name));
+        }
+
+        return options;
+    }
+
+    /// <summary>
+    /// Secili tablonun kolonlarini dropdown/secenek olarak listeler. db.insert/update/upsert
+    /// gibi node'larin "columnsJson" alaninda kolon-bazli deger formu kurmak icin kullanilir.
+    /// </summary>
+    public static async Task<IReadOnlyList<NodeParameterOption>> ListColumnOptionsAsync(INodeExecutionContext context)
+    {
+        var state = ReadState(context);
+        if (state is null)
+        {
+            return [];
+        }
+
+        var table = ReadTable(context);
+        if (string.IsNullOrWhiteSpace(table))
+        {
+            return [];
+        }
+
+        await using var connection = await OpenConnectionAsync(state, context);
+        if (connection is null)
+        {
+            return [];
+        }
+
+        var schema = ReadSchema(context, state);
+        await using var command = connection.CreateCommand();
+        // Her satir: (kolon adi, pk bayragi). PK bayragi UI'da gosterilir ("pk") veya bos.
+        // SQLite: pragma_table_info tablo-degerli fonksiyona parametre binding guvenilir degil;
+        // tablo adi dogrulanmis bir string literal olarak gomulur (tek tirnak escape edilir).
+        command.CommandText = state.Provider switch
+        {
+            DatabaseProvider.Sqlite =>
+                $"SELECT name, CASE WHEN pk > 0 THEN 'pk' ELSE '' END FROM pragma_table_info('{table.Replace("'", "''")}') ORDER BY cid",
+            DatabaseProvider.SqlServer =>
+                "SELECT COLUMN_NAME, '' FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = @table AND (@schema IS NULL OR TABLE_SCHEMA = @schema) ORDER BY ORDINAL_POSITION",
+            DatabaseProvider.MySql =>
+                "SELECT COLUMN_NAME, CASE WHEN COLUMN_KEY = 'PRI' THEN 'pk' ELSE '' END FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = @table ORDER BY ORDINAL_POSITION",
+            _ =>
+                "SELECT column_name, '' FROM information_schema.columns WHERE table_name = @table AND (@schema::text IS NULL OR table_schema = @schema::text) ORDER BY ordinal_position"
+        };
+
+        if (state.Provider != DatabaseProvider.Sqlite)
+        {
+            AddParameter(command, "@table", table);
+        }
+
+        if (state.Provider != DatabaseProvider.MySql && state.Provider != DatabaseProvider.Sqlite)
+        {
+            AddParameter(command, "@schema", string.IsNullOrWhiteSpace(schema) ? null : schema);
+        }
+
+        var options = new List<NodeParameterOption>();
+        await using var reader = await command.ExecuteReaderAsync(context.CancellationToken);
+        while (await reader.ReadAsync(context.CancellationToken))
+        {
+            var name = reader.GetString(0);
+            var pk = !reader.IsDBNull(1) && reader.GetString(1) == "pk";
+            options.Add(new NodeParameterOption(name, pk ? "pk" : ""));
         }
 
         return options;

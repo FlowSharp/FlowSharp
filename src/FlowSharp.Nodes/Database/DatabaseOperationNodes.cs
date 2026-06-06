@@ -6,9 +6,12 @@ namespace FlowSharp.Nodes.Database;
 public abstract class DatabaseOperationNode : NodeType, IHasDynamicOptions
 {
     public Task<IReadOnlyList<NodeParameterOption>> LoadOptionsAsync(INodeExecutionContext context, string parameterKey) =>
-        parameterKey == "table"
-            ? DatabaseNodeHelpers.ListTableOptionsAsync(context)
-            : Task.FromResult<IReadOnlyList<NodeParameterOption>>([]);
+        parameterKey switch
+        {
+            "table" => DatabaseNodeHelpers.ListTableOptionsAsync(context),
+            "columnsJson" => DatabaseNodeHelpers.ListColumnOptionsAsync(context),
+            _ => Task.FromResult<IReadOnlyList<NodeParameterOption>>([])
+        };
 
     protected static IReadOnlyList<NodeParameterDefinition> ColumnsAndWhereParams =>
     [

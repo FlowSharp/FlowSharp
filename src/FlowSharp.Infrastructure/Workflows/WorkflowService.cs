@@ -1,6 +1,9 @@
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Options;
 using FlowSharp.Application.Abstractions;
+using FlowSharp.Application.Ai;
 using FlowSharp.Application.Security;
 using FlowSharp.Application.Workflows;
 using FlowSharp.Domain.Workflows;
@@ -12,7 +15,9 @@ namespace FlowSharp.Infrastructure.Workflows;
 public sealed class WorkflowService(
     ApplicationDbContext dbContext,
     IWorkflowRunner runner,
-    IWebhookRegistrar webhookRegistrar) : IWorkflowService
+    IWebhookRegistrar webhookRegistrar,
+    IHostEnvironment environment,
+    IOptions<RagOptions> ragOptions) : IWorkflowService
 {
     // Silinen workflow'un webhook kayitlarini temizlemek icin bos tanim.
     private static readonly JsonDocument EmptyDefinition = JsonDocument.Parse("""{"nodes":[]}""");
@@ -70,6 +75,38 @@ public sealed class WorkflowService(
         await dbContext.Workflows
             .Where(workflow => workflow.Id == id && (actor.IsAdmin || workflow.OwnerId == actor.UserId))
             .ExecuteDeleteAsync(cancellationToken);
+
+        // Workflow'a ait yerel veri dosyalarini da temizle: SQLite state klasoru ve RAG vektor dosyasi.
+        DeleteWorkflowDataFiles(id);
+    }
+
+    // App_Data/{workflowId}/ (SQLite state) ve RAG {workflowId}.db dosyalarini siler (best-effort).
+    private void DeleteWorkflowDataFiles(Guid id)
+    {
+        var scope = id.ToString("N");
+        try
+        {
+            var stateDir = Path.Combine(environment.ContentRootPath, "App_Data", scope);
+            if (Directory.Exists(stateDir))
+            {
+                Directory.Delete(stateDir, recursive: true);
+            }
+
+            var ragDir = ragOptions.Value.DatabaseDirectory;
+            var ragRoot = Path.IsPathRooted(ragDir) ? ragDir : Path.Combine(environment.ContentRootPath, ragDir);
+            foreach (var ext in new[] { ".db", ".db-wal", ".db-shm" })
+            {
+                var ragFile = Path.Combine(ragRoot, scope + ext);
+                if (File.Exists(ragFile))
+                {
+                    File.Delete(ragFile);
+                }
+            }
+        }
+        catch
+        {
+            // Temizlik best-effort: dosya kilidi vb. silmeyi engellese de workflow silme islemi basarisiz olmamali.
+        }
     }
 
     public async Task<WorkflowSaveResult> SaveAsync(

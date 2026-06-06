@@ -81,6 +81,7 @@ public sealed class DatabaseTableNode : NodeType, IHasDynamicOptions
                 ? "SELECT TABLE_SCHEMA AS schema_name, TABLE_NAME AS table_name FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_TYPE = 'BASE TABLE' ORDER BY TABLE_SCHEMA, TABLE_NAME"
                 : "SELECT TABLE_SCHEMA AS schema_name, TABLE_NAME AS table_name FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_TYPE = 'BASE TABLE' AND TABLE_SCHEMA = @schema ORDER BY TABLE_SCHEMA, TABLE_NAME",
             DatabaseProvider.MySql => "SELECT TABLE_SCHEMA AS schema_name, TABLE_NAME AS table_name FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_TYPE = 'BASE TABLE' ORDER BY TABLE_NAME",
+            DatabaseProvider.Sqlite => "SELECT NULL AS schema_name, name AS table_name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name",
             _ => string.IsNullOrWhiteSpace(schema)
                 ? "SELECT table_schema AS schema_name, table_name FROM information_schema.tables WHERE table_type = 'BASE TABLE' AND table_schema NOT IN ('pg_catalog', 'information_schema') ORDER BY table_schema, table_name"
                 : "SELECT table_schema AS schema_name, table_name FROM information_schema.tables WHERE table_type = 'BASE TABLE' AND table_schema = @schema ORDER BY table_schema, table_name"
@@ -106,12 +107,14 @@ public sealed class DatabaseTableNode : NodeType, IHasDynamicOptions
         {
             DatabaseProvider.SqlServer => "SELECT COLUMN_NAME AS column_name, DATA_TYPE AS data_type, IS_NULLABLE AS is_nullable FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = @table AND (@schema IS NULL OR TABLE_SCHEMA = @schema) ORDER BY ORDINAL_POSITION",
             DatabaseProvider.MySql => "SELECT COLUMN_NAME AS column_name, DATA_TYPE AS data_type, IS_NULLABLE AS is_nullable FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = @table ORDER BY ORDINAL_POSITION",
+            // SQLite: pragma_table_info tablo-degerli fonksiyonu parametre kabul eder; notnull=0 -> nullable.
+            DatabaseProvider.Sqlite => "SELECT name AS column_name, type AS data_type, CASE \"notnull\" WHEN 0 THEN 'YES' ELSE 'NO' END AS is_nullable FROM pragma_table_info(@table) ORDER BY cid",
             // Postgres: @schema null oldugunda parametre tipi belirlenemez (42P08); ::text ile cast edilir.
             _ => "SELECT column_name, data_type, is_nullable FROM information_schema.columns WHERE table_name = @table AND (@schema::text IS NULL OR table_schema = @schema::text) ORDER BY ordinal_position"
         };
 
         DatabaseNodeHelpers.AddParameter(command, "@table", table);
-        if (provider != DatabaseProvider.MySql)
+        if (provider != DatabaseProvider.MySql && provider != DatabaseProvider.Sqlite)
         {
             DatabaseNodeHelpers.AddParameter(command, "@schema", string.IsNullOrWhiteSpace(schema) ? null : schema);
         }

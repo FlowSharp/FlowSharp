@@ -87,6 +87,17 @@ public partial class WorkflowDesigner : IAsyncDisposable
     private string credAddName = "";
     private readonly List<CredField> credAddFields = [];
 
+    // db.ensureTable "columns" parametresi icin satir-tabanli editor durumu (JSON'a serilesir).
+    private sealed class EnsureColumn
+    {
+        public string Name { get; set; } = "";
+        public string Type { get; set; } = "TEXT";
+        public bool Pk { get; set; }
+        public bool NotNull { get; set; }
+    }
+
+    private readonly List<EnsureColumn> ensureColumns = [];
+
     private bool HasChatTrigger => nodes.Any(n => n.NodeKey == "chat.trigger");
     private bool CanRunWorkflow => TriggerStartNodes().Any();
     private bool CanSendChat => ChatStartNode() is not null;
@@ -359,6 +370,23 @@ public partial class WorkflowDesigner : IAsyncDisposable
 
         // Dinamik secenekli parametreleri otomatik yukle (upstream'i olan node'lar icin).
         var node = openNode;
+        insertTarget = null;
+        inputSelectedNodeId = node is not null ? UpstreamNode(node)?.InstanceId : null;
+
+        if (node is not null && node.NodeKey == "db.ensureTable")
+        {
+            LoadEnsureColumns(node);
+        }
+
+        if (node is not null && IsColumnMapNode(node.NodeKey))
+        {
+            LoadColumnValues(node);
+            if (HasAncestors(node))
+            {
+                await LoadDynamicOptionsAsync(node, "columnsJson");
+            }
+        }
+
         if (node is not null && HasAncestors(node) && Definition(node.NodeKey) is { } def)
         {
             foreach (var p in def.Parameters.Where(p => p.DynamicOptions))
@@ -434,6 +462,75 @@ public partial class WorkflowDesigner : IAsyncDisposable
 
     private void SetParam(DesignerNode node, string key, string? value) =>
         node.Parameters[key] = value ?? string.Empty;
+
+    // "columns" JSON'unu satir editorune yukler (node acilisinda cagrilir).
+    private void LoadEnsureColumns(DesignerNode node)
+    {
+        ensureColumns.Clear();
+        var raw = GetParam(node, "columns");
+        if (string.IsNullOrWhiteSpace(raw))
+        {
+            return;
+        }
+
+        try
+        {
+            if (System.Text.Json.Nodes.JsonNode.Parse(raw) is System.Text.Json.Nodes.JsonArray arr)
+            {
+                foreach (var item in arr.OfType<System.Text.Json.Nodes.JsonObject>())
+                {
+                    ensureColumns.Add(new EnsureColumn
+                    {
+                        Name = item["name"]?.ToString() ?? "",
+                        Type = item["type"]?.ToString() ?? "TEXT",
+                        Pk = EnsureBool(item["pk"]),
+                        NotNull = EnsureBool(item["notnull"])
+                    });
+                }
+            }
+        }
+        catch
+        {
+            // Bozuk JSON ise bos editorle baslar; kullanici yeniden tanimlar.
+        }
+    }
+
+    private static bool EnsureBool(System.Text.Json.Nodes.JsonNode? node) =>
+        node is System.Text.Json.Nodes.JsonValue v &&
+        (v.TryGetValue<bool>(out var b) && b ||
+         string.Equals(v.ToString(), "true", StringComparison.OrdinalIgnoreCase));
+
+    // Satir editorunu "columns" JSON parametresine geri yazar.
+    private void SyncEnsureColumns(DesignerNode node)
+    {
+        var arr = new System.Text.Json.Nodes.JsonArray();
+        foreach (var c in ensureColumns)
+        {
+            if (string.IsNullOrWhiteSpace(c.Name))
+            {
+                continue;
+            }
+
+            var o = new System.Text.Json.Nodes.JsonObject
+            {
+                ["name"] = c.Name.Trim(),
+                ["type"] = string.IsNullOrWhiteSpace(c.Type) ? "TEXT" : c.Type.Trim()
+            };
+            if (c.Pk)
+            {
+                o["pk"] = true;
+            }
+
+            if (c.NotNull)
+            {
+                o["notnull"] = true;
+            }
+
+            arr.Add(o);
+        }
+
+        SetParam(node, "columns", arr.ToJsonString());
+    }
 
     // Sticky note'u kuculur/acar ve canvas'i yeniden senkronlar; boylece designer.js icindeki
     // node'lari ve gizler/gosterir (bagli kenarlar yalniz gizlenir, silinmez).
@@ -555,9 +652,15 @@ public partial class WorkflowDesigner : IAsyncDisposable
         if (WorkflowId is null) Navigation.NavigateTo($"workflows/designer/{saved.Id}");
     }
 
-    private async Task ExecuteAsync()
+    private Task ExecuteAsync() => RunAsync(null);
+
+    // Kismi yurutme: bir node ve atalari calisir (Execute node). upToNodeId null ise tam calistirma.
+    private async Task ExecuteUpToAsync(DesignerNode node) => await RunAsync(node.InstanceId);
+
+    private async Task RunAsync(string? upToNodeId)
     {
-        if (!CanRunWorkflow)
+        // Tam calistirmada bagli trigger sart; kismi yurutmede hedefin atalarindan baslanir (trigger sarti yok).
+        if (upToNodeId is null && !CanRunWorkflow)
         {
             await ShowToast(L["designer.run.no_connected_trigger"], true);
             return;
@@ -576,6 +679,7 @@ public partial class WorkflowDesigner : IAsyncDisposable
             {
                 WorkflowId = WorkflowId,
                 ActorOwnerId = currentUserId,
+                UpToNodeId = upToNodeId,
                 OnNodeCompleted = async data =>
                 {
                     var node = nodes.FirstOrDefault(n => n.InstanceId == data.NodeId);
@@ -608,6 +712,22 @@ public partial class WorkflowDesigner : IAsyncDisposable
     }
 
     private RunOutput? NodeOutput(string id) => runOutputs.TryGetValue(id, out var o) ? o : null;
+
+    // ---------- Pin data: node'a sabit ornek cikti tanimla (motor calistirmadan bu veriyi kullanir) ----------
+    private const string PinnedKey = "__pinned";
+
+    private bool IsPinned(DesignerNode node) => !string.IsNullOrWhiteSpace(GetParam(node, PinnedKey));
+
+    // Node'un son calisma ciktisini pin'ler (sabitler). Sonraki calismalarda node calistirilmaz.
+    private void PinNode(DesignerNode node)
+    {
+        if (NodeOutput(node.InstanceId) is { Error: null } output && !string.IsNullOrWhiteSpace(output.Json))
+        {
+            SetParam(node, PinnedKey, output.Json);
+        }
+    }
+
+    private void UnpinNode(DesignerNode node) => SetParam(node, PinnedKey, string.Empty);
 
     /// <summary>
     /// Bir node'un calisma ciktisini editor onizlemesi icin saklar. Cok-cikisli trigger'larda bir
@@ -821,7 +941,6 @@ public partial class WorkflowDesigner : IAsyncDisposable
         return conn is null ? null : nodes.FirstOrDefault(n => n.InstanceId == conn.FromId);
     }
 
-    private string? UpstreamName(DesignerNode node) => UpstreamNode(node)?.Name;
 
     /// <summary>
     /// Bir node'un girdisini, bagli oldugu KAYNAK PORTUN son ciktisi olarak doner (port-aware).
@@ -842,6 +961,176 @@ public partial class WorkflowDesigner : IAsyncDisposable
         }
 
         return runOutputs.TryGetValue(conn.FromId, out var o) ? o.Json : null;
+    }
+
+    // ---------- INPUT veri tarayicisi (n8n tarzi): onceki node'lar + tikla-ekle ----------
+    private string? inputSelectedNodeId;
+    // Son odaklanilan girisin (parametre VEYA kolon hucresi) sonuna ifade ekleyen eylem.
+    private Action<string>? insertTarget;
+
+    // Bir parametre alanina ifade ekleyen kapanis (closure) uretir.
+    private Action<string> AppendToParam(string key) =>
+        expr => { if (openNode is { } n) SetParam(n, key, GetParam(n, key) + expr); };
+
+    // Bir kolon-deger hucresine ifade ekleyen kapanis uretir (columnsJson editoru).
+    private Action<string> AppendToColumn(string column) =>
+        expr =>
+        {
+            columnValues[column] = (columnValues.TryGetValue(column, out var v) ? v : "") + expr;
+            if (openNode is { } n) SyncColumnValues(n);
+        };
+
+    // INPUT panelinde gosterilecek: ciktisi olan tum ata (ancestor) node'lar (yakindan uzaga).
+    private List<DesignerNode> InputSourceNodes(DesignerNode node) =>
+        Ancestors(node).Where(a => runOutputs.ContainsKey(a.InstanceId)).ToList();
+
+    private sealed record InputField(int Depth, string Label, string Path, string Preview);
+
+    // Secili kaynak node'un ilk item'inin JSON'unu duz bir alan listesine cevirir (path + onizleme).
+    private List<InputField> InputFields(string? nodeId)
+    {
+        var fields = new List<InputField>();
+        if (nodeId is null || !runOutputs.TryGetValue(nodeId, out var ro))
+        {
+            return fields;
+        }
+
+        System.Text.Json.Nodes.JsonNode? parsed;
+        try { parsed = System.Text.Json.Nodes.JsonNode.Parse(ro.Json); }
+        catch { return fields; }
+
+        // Cikti bir item dizisidir; ilk item'i kok alir (ifade: $node["Ad"].json...).
+        var root = parsed is System.Text.Json.Nodes.JsonArray arr ? (arr.Count > 0 ? arr[0] : null) : parsed;
+        if (root is not null)
+        {
+            FlattenInput(root, "", 0, fields);
+        }
+
+        return fields;
+    }
+
+    private static void FlattenInput(System.Text.Json.Nodes.JsonNode? node, string path, int depth, List<InputField> sink)
+    {
+        if (node is System.Text.Json.Nodes.JsonObject obj)
+        {
+            foreach (var (key, child) in obj)
+            {
+                var childPath = path + (IsSimpleKey(key) ? "." + key : $"[\"{key}\"]");
+                AddInputField(key, child, childPath, depth, sink);
+            }
+        }
+        else if (node is System.Text.Json.Nodes.JsonArray array)
+        {
+            for (var i = 0; i < array.Count; i++)
+            {
+                AddInputField($"[{i}]", array[i], $"{path}[{i}]", depth, sink);
+            }
+        }
+    }
+
+    private static void AddInputField(string label, System.Text.Json.Nodes.JsonNode? child, string childPath, int depth, List<InputField> sink)
+    {
+        if (child is System.Text.Json.Nodes.JsonArray childArray)
+        {
+            sink.Add(new InputField(depth, label, childPath, $"[{childArray.Count}]"));
+            FlattenInput(child, childPath, depth + 1, sink);
+        }
+        else if (child is System.Text.Json.Nodes.JsonObject)
+        {
+            sink.Add(new InputField(depth, label, childPath, "{…}"));
+            FlattenInput(child, childPath, depth + 1, sink);
+        }
+        else
+        {
+            sink.Add(new InputField(depth, label, childPath, FieldPreview(child)));
+        }
+    }
+
+    private static bool IsSimpleKey(string key) =>
+        key.Length > 0 && (char.IsLetter(key[0]) || key[0] == '_') && key.All(c => char.IsLetterOrDigit(c) || c == '_');
+
+    private static string FieldPreview(System.Text.Json.Nodes.JsonNode? node)
+    {
+        var s = node?.ToString() ?? "null";
+        return s.Length > 60 ? s[..60] + "…" : s;
+    }
+
+    // Secili kaynak node + alan path'inden ifade uretip son odaklanan girise ekler.
+    private void InsertInputExpression(string path)
+    {
+        if (insertTarget is null || inputSelectedNodeId is null)
+        {
+            return;
+        }
+
+        var sourceName = nodes.FirstOrDefault(n => n.InstanceId == inputSelectedNodeId)?.Name;
+        if (string.IsNullOrEmpty(sourceName))
+        {
+            return;
+        }
+
+        insertTarget($"{{{{$node[\"{sourceName}\"].json{path}}}}}");
+    }
+
+    // ---------- columnsJson icin kolon-bazli deger formu (db.insert/update/upsert) ----------
+    private readonly Dictionary<string, string> columnValues = new();
+
+    private static bool IsColumnMapNode(string nodeKey) =>
+        nodeKey is "db.insert" or "db.update" or "db.upsert";
+
+    // Mevcut columnsJson objesini kolon->deger sozlugune yukler (node acilisinda).
+    private void LoadColumnValues(DesignerNode node)
+    {
+        columnValues.Clear();
+        var raw = GetParam(node, "columnsJson");
+        if (string.IsNullOrWhiteSpace(raw))
+        {
+            return;
+        }
+
+        try
+        {
+            if (System.Text.Json.Nodes.JsonNode.Parse(raw) is System.Text.Json.Nodes.JsonObject obj)
+            {
+                foreach (var (key, value) in obj)
+                {
+                    columnValues[key] = value?.ToString() ?? "";
+                }
+            }
+        }
+        catch
+        {
+            // Bozuk JSON: bos formla baslar.
+        }
+    }
+
+    // Kolon->deger formunu columnsJson objesine geri yazar. Canli kolonlar biliniyorsa yalniz
+    // onlari yazar (eski/silinmis kolonlarin bayat degerleri temizlenir); bilinmiyorsa hepsini korur.
+    private void SyncColumnValues(DesignerNode node)
+    {
+        var live = ColumnMapKeys().Select(k => k.Name).ToHashSet();
+        var obj = new System.Text.Json.Nodes.JsonObject();
+        foreach (var (key, value) in columnValues)
+        {
+            if (!string.IsNullOrWhiteSpace(key) && !string.IsNullOrEmpty(value) && (live.Count == 0 || live.Contains(key)))
+            {
+                obj[key] = value;
+            }
+        }
+
+        SetParam(node, "columnsJson", obj.ToJsonString());
+    }
+
+    // Render icin kolon listesi (ad + PK). Canli sema (tablodan yuklenen kolonlar) tek dogru kaynaktir;
+    // yuklenememisse kaydedilmis deger anahtarlarina duser.
+    private List<(string Name, bool IsPk)> ColumnMapKeys()
+    {
+        if (dynOptions.TryGetValue("columnsJson", out var opts) && opts.Count > 0)
+        {
+            return opts.Select(o => (o.Value, o.Label == "pk")).ToList();
+        }
+
+        return columnValues.Keys.Select(k => (k, false)).ToList();
     }
 
     // ---------- Dinamik parametre secenekleri (generic) ----------
@@ -884,7 +1173,7 @@ public partial class WorkflowDesigner : IAsyncDisposable
         try
         {
             using var doc = BuildDefinition();
-            var options = await Engine.LoadOptionsAsync(doc.RootElement, node.InstanceId, parameterKey, currentUserId);
+            var options = await Engine.LoadOptionsAsync(doc.RootElement, node.InstanceId, parameterKey, currentUserId, WorkflowId);
             dynOptions[parameterKey] = options.ToList();
             if (options.Count == 0)
             {

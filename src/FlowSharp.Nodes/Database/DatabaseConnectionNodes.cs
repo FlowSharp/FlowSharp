@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Hosting;
 using FlowSharp.Application.Credentials;
 using FlowSharp.Application.Nodes;
 using FlowSharp.Domain.Credentials;
@@ -94,4 +95,75 @@ public sealed class MySqlConnectionNode : DatabaseConnectionNode
     protected override string CredentialType => "mysql";
     protected override string Display => "MySQL";
     protected override string Color => "#00758f";
+}
+
+/// <summary>
+/// Yerel, dosya tabanli SQLite baglantisi. Diger connection node'larin aksine credential degil,
+/// workflow'a izole bir dosya kullanir: App_Data/{workflowId}/{database}.db. Boylece uzak DB/ag
+/// maliyeti olmadan, downstream db.* node'lariyla tam (cok tablolu) CRUD yapilabilir.
+/// </summary>
+public sealed class SqliteConnectionNode : NodeType
+{
+    public override NodeDefinition Definition { get; } = new(
+        Key: "db.sqlite.connection",
+        DisplayName: "SQLite Connection",
+        Category: NodeCategory.Database,
+        Kind: NodeKind.Action,
+        Description: "Yerel bir SQLite .db dosyasi icin yeniden kullanilabilir baglanti baglami olusturur (App_Data/{workflowId}/{database}.db).",
+        Parameters:
+        [
+            new NodeParameterDefinition("database", "Database File", NodeParameterType.String, IsRequired: true,
+                DefaultValue: "data",
+                HelpText: "Dosya adi (uzantisiz). App_Data/{workflowId}/{ad}.db olarak olusturulur."),
+            new NodeParameterDefinition("testConnection", "Test Connection", NodeParameterType.Boolean, DefaultValue: "true")
+        ],
+        Tags: ["database", "connection", "sqlite"],
+        Icon: "database",
+        Color: "#0f80cc",
+        SubCategory: "Connections");
+
+    public override async Task<NodeExecutionResult> ExecuteAsync(INodeExecutionContext context)
+    {
+        var name = SafeFileName(context.GetString("database"));
+        if (name is null)
+        {
+            return NodeExecutionResult.Failure("Gecerli bir SQLite dosya adi girilmelidir (harf/rakam/-/_).");
+        }
+
+        var environment = (IHostEnvironment)context.Services.GetService(typeof(IHostEnvironment))!;
+        var scope = context.WorkflowId?.ToString("N") ?? "global";
+        var directory = Path.Combine(environment.ContentRootPath, "App_Data", scope);
+        Directory.CreateDirectory(directory);
+        var dataSource = Path.Combine(directory, name + ".db");
+
+        var state = new DatabaseConnectionState(
+            DatabaseProvider.Sqlite,
+            CredentialType: "",
+            CredentialName: "",
+            Database: name,
+            Schema: null,
+            DataSource: dataSource);
+
+        if (context.GetBoolean("testConnection", defaultValue: true))
+        {
+            await using var connection = await DatabaseNodeHelpers.OpenConnectionAsync(state, context);
+            if (connection is null)
+            {
+                return NodeExecutionResult.Failure("SQLite dosyasi acilamadi.");
+            }
+        }
+
+        return NodeExecutionResult.Single(NodeItem.From(DatabaseNodeHelpers.ToJson(state)));
+    }
+
+    private static string? SafeFileName(string? raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw))
+        {
+            return null;
+        }
+
+        var cleaned = new string(raw.Where(ch => char.IsLetterOrDigit(ch) || ch is '-' or '_').ToArray());
+        return string.IsNullOrEmpty(cleaned) ? null : cleaned;
+    }
 }

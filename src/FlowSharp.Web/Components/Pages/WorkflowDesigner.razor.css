@@ -567,6 +567,24 @@ html[data-theme="dark"] .toast {
     box-shadow: var(--nwf-shadow);
 }
 
+.nwf-node-pin {
+    position: absolute;
+    top: -10px;
+    left: 15px;
+    z-index: 4;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    border: 2px solid var(--nwf-surface);
+    border-radius: 50%;
+    background: #f59e0b;
+    color: #fff;
+    font-size: 12px;
+    box-shadow: var(--nwf-shadow);
+}
+
 .nwf-node-exec-status.success {
     background: var(--nwf-success);
 }
@@ -1066,6 +1084,65 @@ html[data-theme="dark"] .toast {
 
 .ndv-col.input {
     border-right: 1px solid var(--nwf-border);
+}
+
+.ndv-input-hint {
+    margin: 8px 0;
+    font-size: 11px;
+    color: var(--nwf-muted);
+    line-height: 1.4;
+}
+
+.ndv-fields {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+}
+
+.ndv-field-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 3px 6px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 12px;
+    white-space: nowrap;
+}
+
+.ndv-field-row:hover {
+    background: var(--nwf-surface-3, rgba(125, 125, 135, 0.18));
+}
+
+.ndv-field-key {
+    color: var(--nwf-text, #e2e8f0);
+    font-weight: 600;
+}
+
+.ndv-field-val {
+    color: var(--nwf-muted);
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.colmap-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 4px;
+}
+
+.colmap-key {
+    flex: 0 0 130px;
+    font-weight: 600;
+    font-size: 12px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.colmap-row .input {
+    flex: 1;
 }
 
 .ndv-col.output {

@@ -94,11 +94,35 @@ public sealed class WorkflowExecutionEngine(
         var explicitStart = options.StartNodeName
             ?? (trigger.TryGetPropertyValue("node", out var triggerNode) ? triggerNode?.ToString() : null);
 
-        var implicitStarts = options.AllowSourceNodesWithoutTrigger
+        var implicitStarts = (options.AllowSourceNodesWithoutTrigger
             ? nodes.Where(node => !outerIncoming.ContainsKey(node.Id) && hasOutgoing.Contains(node.Id))
-            : nodes.Where(node => IsTrigger(node) && !outerIncoming.ContainsKey(node.Id) && hasOutgoing.Contains(node.Id));
+            : nodes.Where(node => IsTrigger(node) && !outerIncoming.ContainsKey(node.Id) && hasOutgoing.Contains(node.Id)))
+            .ToList();
 
-        var startIds = (!string.IsNullOrEmpty(explicitStart)
+        // Kismi yurutme (Execute node): hedef node'un atalarindan olusan alt graf. Baslangic, bu alt
+        // grafin kok node'lari (girisi olmayan trigger/kaynak); hedef ve downstream'i ALLOWED ile sinirlanir.
+        HashSet<string>? allowed = null;
+        if (!string.IsNullOrEmpty(options.UpToNodeId) && nodes.Any(node => node.Id == options.UpToNodeId))
+        {
+            allowed = AncestorsAndSelf(options.UpToNodeId, outerIncoming);
+            implicitStarts = nodes
+                .Where(node => allowed.Contains(node.Id) && !outerIncoming.ContainsKey(node.Id) && hasOutgoing.Contains(node.Id))
+                .ToList();
+        }
+        // Manuel calistirma (explicit start yok): olay-tabanli trigger'lar (webhook/schedule/imap/whatsapp...)
+        // kendiliginden ATESLENMEZ. Canvas'ta bir Manuel Tetikleyici varsa baslangic yalniz manuel
+        // trigger'lara indirgenir; yoksa (tek trigger'li akislari test edebilmek icin) mevcut davranis korunur.
+        // Gercek olaylar (webhook POST, zamanlayici...) explicit start ile geldiginden bu daldan etkilenmez.
+        else if (string.IsNullOrEmpty(explicitStart) && !options.AllowSourceNodesWithoutTrigger)
+        {
+            var manualStarts = implicitStarts.Where(IsManualTrigger).ToList();
+            if (manualStarts.Count > 0)
+            {
+                implicitStarts = manualStarts;
+            }
+        }
+
+        var startIds = (!string.IsNullOrEmpty(explicitStart) && allowed is null
                 ? nodes.Where(node => node.Name.Equals(explicitStart, StringComparison.OrdinalIgnoreCase)).Select(node => node.Id)
                 : implicitStarts.Select(node => node.Id))
             .Where(id => !allBodyIds.Contains(id))
@@ -137,7 +161,16 @@ public sealed class WorkflowExecutionEngine(
         async Task<NodeRunData> RunNodeAsync(EngineNode node, IReadOnlyList<NodeItem> input, bool recordLog = true)
         {
             (NodeRunData Log, IReadOnlyList<IReadOnlyList<NodeItem>> Outputs) run;
-            if (loopRegions.TryGetValue(node.Id, out var region))
+            // Pin data: node sabitlenmis ornek veriye sahipse calistirilmaz, o veri cikti olarak akar.
+            // (Webhook/trigger'lari canli olay olmadan taklit etmenin yolu.)
+            if (PinnedItems(node) is { } pinned)
+            {
+                run = (new NodeRunData(node.Id, node.Name, node.Type, NodeRunStatus.Succeeded,
+                          captureData ? ToJson(pinned) : new JsonArray(), null,
+                          DateTimeOffset.UtcNow, DateTimeOffset.UtcNow, pinned.Count),
+                       [pinned, []]);
+            }
+            else if (loopRegions.TryGetValue(node.Id, out var region))
             {
                 run = await DriveLoopAsync(region, input);
             }
@@ -267,6 +300,12 @@ public sealed class WorkflowExecutionEngine(
                 continue;
             }
 
+            // Kismi yurutmede yalniz hedef + atalari calisir (downstream atlanir).
+            if (allowed is not null && !allowed.Contains(node.Id))
+            {
+                continue;
+            }
+
             var isStart = startIds.Contains(node.Id);
             var hasIncoming = outerIncoming.TryGetValue(node.Id, out var sources) && sources.Count > 0;
 
@@ -300,6 +339,7 @@ public sealed class WorkflowExecutionEngine(
         string nodeId,
         string parameterKey,
         string? actorOwnerId = null,
+        Guid? workflowId = null,
         CancellationToken cancellationToken = default)
     {
         var nodes = ParseNodes(definition);
@@ -340,6 +380,9 @@ public sealed class WorkflowExecutionEngine(
                 new WorkflowExecutionOptions
                 {
                     AllowSourceNodesWithoutTrigger = true,
+                    // Upstream node'lar (orn. SQLite Connection) introspection sirasinda da gercek
+                    // workflow DB dosyasini kullansin; aksi halde "global" fallback'i olusur.
+                    WorkflowId = workflowId,
                     OnNodeCompleted = data =>
                     {
                         captured[data.NodeId] = ToItems(data.Output);
@@ -370,7 +413,7 @@ public sealed class WorkflowExecutionEngine(
             target.Type, target.Name, target.Parameters,
             input.Count > 0 ? input : [NodeItem.Empty()],
             outputsByName, new JsonObject(), runIndex: 0, evaluator, services,
-            _ => { }, cancellationToken, workflowId: null, actorOwnerId: actorOwnerId);
+            _ => { }, cancellationToken, workflowId: workflowId, actorOwnerId: actorOwnerId);
 
         return await provider.LoadOptionsAsync(context, parameterKey);
     }
@@ -630,6 +673,60 @@ public sealed class WorkflowExecutionEngine(
     private NodeRunData Skipped(EngineNode node, string reason) =>
         new(node.Id, node.Name, node.Type, NodeRunStatus.Skipped, new JsonArray(), reason,
             DateTimeOffset.UtcNow, DateTimeOffset.UtcNow, 0);
+
+    // Node'un sabitlenmis (pinned) ornek verisi varsa item listesine cevirir; yoksa null.
+    private static List<NodeItem>? PinnedItems(EngineNode node)
+    {
+        if (node.Parameters["__pinned"] is not { } pinned)
+        {
+            return null;
+        }
+
+        JsonNode? source = pinned;
+        if (pinned is JsonValue value && value.TryGetValue<string>(out var raw))
+        {
+            if (string.IsNullOrWhiteSpace(raw))
+            {
+                return null;
+            }
+
+            try { source = JsonNode.Parse(raw); }
+            catch { return null; }
+        }
+
+        var items = ToItems(source);
+        return items.Count > 0 ? items : null;
+    }
+
+    // Hedef node ve tum atalari (transitif upstream) — kismi yurutme alt grafi.
+    private static HashSet<string> AncestorsAndSelf(string target, Dictionary<string, List<Connection>> incoming)
+    {
+        var set = new HashSet<string>(StringComparer.Ordinal);
+        var stack = new Stack<string>();
+        stack.Push(target);
+        while (stack.Count > 0)
+        {
+            var id = stack.Pop();
+            if (!set.Add(id))
+            {
+                continue;
+            }
+
+            if (incoming.TryGetValue(id, out var conns))
+            {
+                foreach (var conn in conns)
+                {
+                    stack.Push(conn.FromId);
+                }
+            }
+        }
+
+        return set;
+    }
+
+    // Manuel calistirmada implicit baslangic icin: yalniz Manuel Tetikleyici.
+    private static bool IsManualTrigger(EngineNode node) =>
+        node.Type.Equals("manual.trigger", StringComparison.OrdinalIgnoreCase);
 
     private bool IsTrigger(EngineNode node) =>
         registry.Find(node.Type)?.Definition.Kind == NodeKind.Trigger ||

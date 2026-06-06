@@ -26,6 +26,7 @@ public interface IWorkflowExecutionEngine
         string nodeId,
         string parameterKey,
         string? actorOwnerId = null,
+        Guid? workflowId = null,
         CancellationToken cancellationToken = default);
 }
 
@@ -34,6 +35,12 @@ public sealed class WorkflowExecutionOptions
 {
     /// <summary>Yalniz bu node ornek adindan baslat (manuel tek-node testi); null ise tum tetikleyiciler.</summary>
     public string? StartNodeName { get; init; }
+
+    /// <summary>
+    /// Ayarliysa kismi yurutme: yalniz bu node'un (id) ve atalarinin olusturdugu alt graf calistirilir;
+    /// alt grafin kok trigger'larindan baslar, hedef node'da durur (downstream calismaz). "Execute node".
+    /// </summary>
+    public string? UpToNodeId { get; init; }
 
     /// <summary>
     /// true ise bagli trigger bulunmadiginda girisi olmayan kaynak node'lardan baslatmaya izin verir.

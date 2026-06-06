@@ -145,6 +145,13 @@
                             }
                         }
 
+                        @if (IsPinned(node))
+                        {
+                            <div class="nwf-node-pin" title="Veri sabitlendi (pin)">
+                                <i class="bi bi-pin-angle-fill"></i>
+                            </div>
+                        }
+
                         @for (var k = 0; k < mainIns.Count; k++)
                         {
                             <div class="nwf-port in" id="port-@node.InstanceId-in-@mainIns[k].Idx"
@@ -343,21 +350,46 @@
                 <div class="sp"></div>
                 @if (!IsReadOnly)
                 {
-                    <button class="btn btn-success btn-sm" @onclick="ExecuteAsync" disabled="@(running || !CanRunWorkflow)">▶ @L["common.run"]</button>
+                    <button class="btn btn-success btn-sm" @onclick="() => ExecuteUpToAsync(openNode)" disabled="@running"
+                            title="Bu node'u ve atalarini calistir (downstream calismaz)">▶ @L["common.run"]</button>
                 }
                 <button class="nwf-drawer-close" @onclick="CloseNdv">✕</button>
             </div>
 
             <div class="ndv-grid">
                 <div class="ndv-col io input">
-                    <h3>@L["designer.ndv.input"] @(UpstreamName(openNode) is { } un ? $"· {un}" : "")</h3>
-                    @if (UpstreamOutput(openNode) is { } inp)
+                    <h3>@L["designer.ndv.input"]</h3>
+                    @{
+                        var inputSources = InputSourceNodes(openNode);
+                        if (inputSources.Count > 0 && (inputSelectedNodeId is null || inputSources.All(s => s.InstanceId != inputSelectedNodeId)))
+                        {
+                            inputSelectedNodeId = inputSources[0].InstanceId;
+                        }
+                    }
+                    @if (inputSources.Count == 0)
                     {
-                        <div class="ndv-data"><pre>@inp</pre></div>
+                        <div class="ndv-empty">@L["designer.ndv.no_upstream_data"]</div>
                     }
                     else
                     {
-                        <div class="ndv-empty">@L["designer.ndv.no_upstream_data"]</div>
+                        <select class="select" value="@inputSelectedNodeId"
+                                @onchange="e => inputSelectedNodeId = e.Value?.ToString()">
+                            @foreach (var s in inputSources)
+                            {
+                                <option value="@s.InstanceId" selected="@(s.InstanceId == inputSelectedNodeId)">@s.Name</option>
+                            }
+                        </select>
+                        <div class="ndv-input-hint">Bir parametreye tıkla, sonra aşağıdaki bir alana tıkla → ifade otomatik eklenir.</div>
+                        <div class="ndv-fields">
+                            @foreach (var f in InputFields(inputSelectedNodeId))
+                            {
+                                <div class="ndv-field-row" style="padding-left:@(6 + f.Depth * 14)px"
+                                     title="@f.Path tıkla → ekle" @onclick="() => InsertInputExpression(f.Path)">
+                                    <span class="ndv-field-key">@f.Label</span>
+                                    <span class="ndv-field-val">@f.Preview</span>
+                                </div>
+                            }
+                        </div>
                     }
                 </div>
 
@@ -408,7 +440,7 @@
                     {
                         @foreach (var p in def.Parameters.Where(p => IsParamVisible(openNode, p)))
                         {
-                            <div class="field">
+                            <div class="field" @onfocusin="() => insertTarget = AppendToParam(p.Key)">
                                 <label>@p.Label @(p.IsRequired ? "*" : "")</label>
                                 @if (p.Type == NodeParameterType.Credential)
                                 {
@@ -470,6 +502,75 @@
                                             </div>
                                         </div>
                                     }
+                                }
+                                else if (p.Key == "columnsJson" && (def.Key is "db.insert" or "db.update" or "db.upsert"))
+                                {
+                                    // Upsert'te key (PK) kolonlari gerekir; insert/update'te PK gizlenir (otomatik/where).
+                                    var showPk = def.Key == "db.upsert";
+                                    var mapKeys = ColumnMapKeys().Where(k => showPk || !k.IsPk).ToList();
+                                    var colLoading = dynLoading.Contains("columnsJson");
+                                    <div class="ndv-colmap">
+                                        <div style="display:flex; gap:6px; align-items:center; margin-bottom:6px">
+                                            <span class="hint" style="flex:1">Tablo kolonlarini doldur (bos kolon atlanir).</span>
+                                            <button class="btn btn-ghost btn-sm" title="Kolonlari yenile" disabled="@(IsReadOnly || colLoading)"
+                                                    @onclick='() => LoadDynamicOptionsAsync(openNode, "columnsJson")'>
+                                                @(colLoading ? "…" : "↻")
+                                            </button>
+                                        </div>
+                                        @if (mapKeys.Count == 0)
+                                        {
+                                            <div class="expr-hint expr-err">Kolon bulunamadi. Tabloyu sec ve ↻ ile yenile (bir kez calistirmak gerekebilir).</div>
+                                        }
+                                        @foreach (var (colName, _) in mapKeys)
+                                        {
+                                            var colVal = columnValues.TryGetValue(colName, out var cv) ? cv : "";
+                                            var colPrev = PreviewExpression(openNode, colVal);
+                                            <div class="colmap-row" @onfocusin:stopPropagation="true" @onfocusin="() => insertTarget = AppendToColumn(colName)">
+                                                <label class="colmap-key" title="@colName">@colName</label>
+                                                <input class="input expr-@colPrev.State" value="@colVal" placeholder="deger veya {{ ifade }}"
+                                                       @oninput="e => { columnValues[colName] = e.Value?.ToString() ?? string.Empty; SyncColumnValues(openNode); }"
+                                                       disabled="@IsReadOnly" />
+                                            </div>
+                                            @if (colPrev.State == "valid")
+                                            {
+                                                <div class="expr-hint expr-ok">= @colPrev.Message</div>
+                                            }
+                                            else if (colPrev.State == "invalid")
+                                            {
+                                                <div class="expr-hint expr-err">@colPrev.Message</div>
+                                            }
+                                        }
+                                    </div>
+                                }
+                                else if (def.Key == "db.ensureTable" && p.Key == "columns")
+                                {
+                                    <div class="ensure-columns">
+                                        @foreach (var (col, idx) in ensureColumns.Select((c, i) => (c, i)))
+                                        {
+                                            <div style="display:flex; gap:6px; margin-bottom:4px; align-items:center">
+                                                <input class="input" style="flex:1" placeholder="kolon adi" value="@col.Name"
+                                                       @oninput="e => { col.Name = e.Value?.ToString() ?? string.Empty; SyncEnsureColumns(openNode); }" disabled="@IsReadOnly" />
+                                                <input class="input" list="ensure-col-types" style="width:120px" placeholder="TEXT" value="@col.Type"
+                                                       @oninput="e => { col.Type = e.Value?.ToString() ?? string.Empty; SyncEnsureColumns(openNode); }" disabled="@IsReadOnly" />
+                                                <label style="display:flex; gap:3px; align-items:center; font-weight:400" title="Primary Key">
+                                                    <input type="checkbox" checked="@col.Pk"
+                                                           @onchange="e => { col.Pk = (bool)(e.Value ?? false); SyncEnsureColumns(openNode); }" disabled="@IsReadOnly" />PK</label>
+                                                <label style="display:flex; gap:3px; align-items:center; font-weight:400" title="NOT NULL">
+                                                    <input type="checkbox" checked="@col.NotNull"
+                                                           @onchange="e => { col.NotNull = (bool)(e.Value ?? false); SyncEnsureColumns(openNode); }" disabled="@IsReadOnly" />NN</label>
+                                                <button class="btn btn-danger btn-sm" title="Sil" disabled="@IsReadOnly"
+                                                        @onclick="() => { ensureColumns.RemoveAt(idx); SyncEnsureColumns(openNode); }">−</button>
+                                            </div>
+                                        }
+                                        <datalist id="ensure-col-types">
+                                            <option>TEXT</option><option>INTEGER</option><option>REAL</option>
+                                            <option>NUMERIC</option><option>BLOB</option>
+                                        </datalist>
+                                        @if (!IsReadOnly)
+                                        {
+                                            <button class="btn btn-ghost btn-sm" @onclick="() => { ensureColumns.Add(new()); SyncEnsureColumns(openNode); }">+ Kolon</button>
+                                        }
+                                    </div>
                                 }
                                 else if (p.Type is NodeParameterType.Text or NodeParameterType.Json or NodeParameterType.Code)
                                 {
@@ -596,6 +697,22 @@
 
                 <div class="ndv-col io output">
                     <h3>@L["designer.ndv.output"]</h3>
+                    @if (!IsReadOnly)
+                    {
+                        <div style="display:flex; gap:6px; margin-bottom:6px; align-items:center">
+                            @if (IsPinned(openNode))
+                            {
+                                <span class="hint" style="flex:1">📌 Veri sabitlendi — bu node calismaz, sabit veri akar.</span>
+                                <button class="btn btn-ghost btn-sm" @onclick="() => UnpinNode(openNode)">Pin'i kaldir</button>
+                            }
+                            else if (NodeOutput(openNode.InstanceId) is { Error: null })
+                            {
+                                <span class="hint" style="flex:1"></span>
+                                <button class="btn btn-ghost btn-sm" title="Bu ciktiyi ornek veri olarak sabitle"
+                                        @onclick="() => PinNode(openNode)">📌 Pin'le</button>
+                            }
+                        </div>
+                    }
                     @if (NodeOutput(openNode.InstanceId) is { } output)
                     {
                         @if (!string.IsNullOrWhiteSpace(output.Error))
