@@ -9,8 +9,8 @@
   <!-- PostgreSQL'e ozel native migration seti. ApplicationDbContext'i Infrastructure'dan alir. -->
   <ItemGroup>
     <ProjectReference Include="..\FlowSharp.Infrastructure\FlowSharp.Infrastructure.csproj" />
-    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.2" />
-    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.8" PrivateAssets="all" />
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.3" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.10" PrivateAssets="all" />
   </ItemGroup>
 
 </Project>
