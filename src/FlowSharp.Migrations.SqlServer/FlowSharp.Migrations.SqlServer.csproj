@@ -9,8 +9,8 @@
   <!-- SQL Server'a ozel native migration seti. ApplicationDbContext'i Infrastructure'dan alir. -->
   <ItemGroup>
     <ProjectReference Include="..\FlowSharp.Infrastructure\FlowSharp.Infrastructure.csproj" />
-    <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="10.0.8" />
-    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.8" PrivateAssets="all" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="10.0.11" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.11" PrivateAssets="all" />
   </ItemGroup>
 
 </Project>
